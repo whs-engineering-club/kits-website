@@ -96,6 +96,12 @@ function chair(b, x, dir) {
   );
 }
 
+// Shift a part sideways from where it was built (mesh parts carry their own position).
+function shiftX(p, dx) {
+  p.userData.x0 ??= p.position.x;
+  p.position.x = p.userData.x0 + dx;
+}
+
 // A glide from (x0, y0) down to (x1, y1); holds the landing at the end of each loop.
 function glide(g, t, period, x0, y0, x1, y1, pitch) {
   const u = Math.min(1, (t % period) / (period * 0.7));
@@ -130,9 +136,9 @@ export default {
     pivot(b, [TX, TH + REST, -7], dart(b.mk, { L: 8, clip: true }));
     pivot(b, [TX, TH + REST, 0], dart(b.mk, { L: 8, elevators: true }));
     pivot(b, [TX, TH + REST, 7], dart(b.mk, { L: 8, wide: true }));
-    b.label('Paper clip on the nose', [TX + 2, TH + 2.6, -7]);
-    b.label('or back edges bent up', [TX - 3, TH + 3.4, 0]);
-    b.label('or wider wings', [TX, TH + 2.8, 7.5]);
+    b.label('Paper clip on the nose', [TX + 2, TH + 5, -7]);
+    b.label('or back edges bent up', [TX + 9, TH + 1.2, 0]);
+    b.label('or wider wings', [TX - 3, TH + 0.5, 11]);
 
     b.step(5);
     const planeB = pivot(b, [19, REST, 0.5], dart(b.mk, { clip: true }));
@@ -190,8 +196,8 @@ export default {
 
     b.step(4);
     const strip = (x) => [
-      b.mk.box(0.9, 0.1, 1.9, BLUE, [x, SY + 0.37, 0]),
-      b.mk.box(0.9, 1, 0.1, BLUE, [x, SY - 0.1, 0.92]), b.mk.box(0.9, 1, 0.1, BLUE, [x, SY - 0.1, -0.92]),
+      b.mk.box(0.9, 0.1, 1.1, BLUE, [x, SY + 0.37, 0]),
+      b.mk.bar([x, SY + 0.37, 0.5], [x, SY - 1.1, 2], 0.9, 0.1, BLUE), b.mk.bar([x, SY + 0.37, -0.5], [x, SY - 1.1, -2], 0.9, 0.1, BLUE),
     ];
     const tape = b.part(strip(X0 - 1.4), strip(X0 + 1.4));
     b.label('Tape the balloon to the straw', [X0, SY + 2.2, 0]);
@@ -203,12 +209,14 @@ export default {
     const puffs = pivot(b, [X0 - 5.4, SY - 3.4, 0], [0, 1, 2].map((i) =>
       b.mk.sphere(0.45 + i * 0.25, 0xffffff, [-1 - i * 1.5, 0, 0], { opacity: 0.5 - i * 0.12 })));
     b.label('Start the stopwatch, release the clip', [X0, SY + 3, 0]);
+    b.label('It races along the string', [10, SY + 3, 0]);
 
     b.step(6); tapeMeasure(b, X0, X0 + 27, 4);
     b.label('Record distance and time', [0.5, 2.2, 4]);
 
     b.step(7, { only: true });
     b.label('Half-full balloon: slower, not as far', [X0 + 6, SY + 3, 0]);
+    b.label('Compare the two speeds', [6, 2.2, 4]);
 
     b.effect((s, t) => {
       let dx = 0, sc = 1, moving = false;
@@ -220,7 +228,7 @@ export default {
       if (s === 5) run(26, 1, 4.2);
       else if (s === 6) { dx = 26; sc = 0.4; }
       else if (s === 7) run(13, 0.7, 4.6);
-      straw.position.x = dx; tape.position.x = dx;
+      shiftX(straw, dx); shiftX(tape, dx);
       bal.position.x = X0 + dx; bal.scale.setScalar(sc);
       puffs.visible = moving;
       puffs.position.set(X0 + dx - 5.4 * sc, SY - 0.4 - 3 * sc, 0);
@@ -341,7 +349,7 @@ export default {
         const u = Math.min(1, (t % 4.2) / 3);
         dx = 6 + 28 * u; dy = 9 - (9 + TH - 0.04) * u;
       }
-      G.forEach((p) => { p.position.x = dx; p.position.y += dy; });
+      G.forEach((p) => { shiftX(p, dx); p.position.y += dy; });
     });
   },
 
@@ -364,8 +372,8 @@ export default {
     ));
     const prop = pivot(b, [F + 0.7, SY, 0], [
       b.mk.cyl(0.4, 0.9, 0x333338, [0, 0, 0], { rot: [0, 0, PI / 2] }),
-      b.mk.box(0.16, 2.8, 1, 0xe5484d, [0, 1.6, 0], [0, 0.5, 0]),
-      b.mk.box(0.16, 2.8, 1, 0xe5484d, [0, -1.6, 0], [0, -0.5, 0]),
+      b.mk.box(0.16, 2.8, 1.5, 0xe5484d, [0, 1.6, 0], [0, 0.65, 0]),
+      b.mk.box(0.16, 2.8, 1.5, 0xe5484d, [0, -1.6, 0], [0, -0.65, 0]),
       b.mk.rod([0, 0, 0], [-2.3, 0, 0], 0.08, STEEL, wire),
       b.mk.torus(0.22, 0.07, STEEL, [-2.5, 0, 0], null, wire),
     ]);
@@ -403,13 +411,14 @@ export default {
     }
     c(b.tube(twist, 0.08, 0xa86e33));
     b.label('Wind 50 turns, set it down, let go', [CX + 4, SY + 5, 0]);
+    b.label('The propeller pulls it forward', [F + 16, 7.5, 0]);
 
     b.step(7);
-    tapeMeasure(b, F + 1, F + 31, 7);
-    cone(b, F + 19, 5, BLUE); cone(b, F + 31, 5, GREEN);
-    b.label('50 turns', [F + 19, 3, 5]);
-    b.label('100 turns: twice as far?', [F + 31, 4.6, 5]);
-    b.label('Record the distance each time', [F + 12, 2.2, 8]);
+    tapeMeasure(b, F + 1, F + 31, 9.5);
+    cone(b, F + 19, 7.5, BLUE); cone(b, F + 31, 7.5, GREEN);
+    b.label('50 turns', [F + 19, 2.6, 7.5]);
+    b.label('100 turns: twice as far?', [F + 31, 2.6, 7.5]);
+    b.label('Record the distance each time', [CX, 9, 0]);
 
     b.effect((s, t) => {
       let dx = 0, spin = 0;
@@ -419,7 +428,7 @@ export default {
         const p = 1 - (1 - u) ** 2;
         dx = dist * p; spin = p * (s === 6 ? 50 : 90);
       }
-      car.forEach((p) => { p.position.x = dx; });
+      car.forEach((p) => shiftX(p, dx));
       prop.position.x = F + 0.7 + dx;
       prop.rotation.x = spin;
     });
@@ -436,8 +445,8 @@ export default {
     b.step(1, { only: true });
     pivot(b, [TX, GY, -3.5], glider(b.mk, { payload: true }));
     const demo = pivot(b, [TGT, 17, 0], chute(b.mk));
-    b.label('Mission A: glider carries the payload', [TX, TH + 4, -3.5]);
-    b.label('Mission B: drop system over the target', [TGT, 21.5, 0]);
+    b.label('A: glider carries the payload', [TX, TH + 4, -3.5]);
+    b.label('B: drop system over the target', [TGT - 3, 21.5, 0]);
 
     b.step(2);
     b.box(0.6, 0.08, 12, RED, [LINE, 0.04, 0]);
@@ -472,7 +481,7 @@ export default {
 
     b.step(7); cone(b, 15, 2.2, GREEN, 0.12); cone(b, 17.6, -0.8, GREEN, 0.12); cone(b, 14.2, -2.6, GREEN, 0.1);
     b.label('3 scored attempts', [TGT, 5, 0]);
-    b.label('Present your data', [TGT, 9, 0]);
+    b.label('Present your data', [0, 9, 0]);
 
     b.effect((s, t) => {
       demo.position.y = 17 + Math.sin(t * 1.2) * 1.2;

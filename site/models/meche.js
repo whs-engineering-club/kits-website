@@ -156,11 +156,11 @@ export default {
 
     // 6: on the scale
     b.step(6);
-    scale(b, [22, TOP, -9], 'x');
+    scale(b, [22, TOP, -8]);
     b.step(6, { only: true });
-    const onScale = bridge(b, (u, v, w) => [22 + w, TOP + 1.7 + v, u - 24]);
+    const onScale = bridge(b, (u, v, w) => [7 + u, TOP + 1.7 + v, -8 + w]);
     b.part(onScale.side(-3), onScale.side(3), onScale.cross(), onScale.deck());
-    b.label('Glue set? Weigh it and record the mass', [22, TOP + 12, -9]);
+    b.label('Glue set? Weigh it and record the mass', [22, TOP + 12, -8]);
 
     // 7: across the gap, loaded to failure
     b.step(7);
@@ -168,7 +168,7 @@ export default {
     const fin = bridge(b, M);
     b.part(fin.side(-3), fin.side(3, 1), fin.cross(), fin.deck());
     const stick = snapStick(b, M(7.5, 0, 3), 7.5);
-    const stacks = [0, -2.3, 2.3].map((x) => b.weights([x, TOP + 0.5 + fin.deckTop, 0], 6));
+    const stacks = [0, -2.3, 2.3].map((x) => b.weights([x, TOP + 0.5 + fin.deckTop, 0], 9));
     loadTest(b, stacks, stick, 7, 1.2);
     b.label('Add weight at the centre, a little at a time', [0, TOP + 11, 0]);
     b.label('Which piece fails first?', [-5, TOP - 3, 3]);
@@ -204,7 +204,7 @@ export default {
     b.weights([0, T.top + 0.4, 0], 8);
     b.step(6, { only: true });
     ruler(b, [11, 1, 9], [11, T.top + 0.4, 9], [0, 0, 1]);
-    b.label('Measure the height', [11, T.top + 2, 9]);
+    b.label('Measure the height', [11, 16, 9]);
     b.label('Weight on top: count 10 seconds', [0, T.top + 5, 0]);
   },
 
@@ -266,18 +266,17 @@ export default {
     // 5: paper-clip hook
     b.step(5);
     const HX = TIP - 0.4, HY = RY - 0.5;
-    b.tube([[HX, RY + 0.5, 0], [HX, HY - 0.6, 0], [HX, HY - 2.2, 0], [HX + 0.5, HY - 2.9, 0], [HX + 1, HY - 2.3, 0]], 0.09, 0xc8ccd0, { metal: 0.8, rough: 0.3 });
-    b.label('Paper-clip hook on the tip', [HX, HY - 4.5, 0]);
+    b.tube([[HX, RY + 0.5, 0], [HX, HY - 0.6, 0], [HX, HY - 2.2, 0], [HX + 0.5, HY - 2.9, 0], [HX + 1, HY - 2.3, 0]], 0.14, 0xc8ccd0, { metal: 0.8, rough: 0.3 });
+    b.label('Paper-clip hook on the tip', [HX, HY - 5, 0]);
 
     // 6: measure reach, add weight
     b.step(6);
     const load = b.part([-0.6, -0.3, 0, 0.3, 0.6].map((dz) =>
-      b.mk.torus(0.75, 0.2, STEEL, [HX + 0.5, HY - 3.65, dz], null, { metal: 0.7, rough: 0.35 })));
+      b.mk.torus(1.1, 0.3, STEEL, [HX + 0.5, HY - 4.15, dz * 1.6], null, { metal: 0.7, rough: 0.35 })));
     b.step(6, { only: true });
-    ruler(b, [0, TOP - 1.2, 11.1], [TIP, TOP - 1.2, 11.1], [0, 0, 1]);
-    b.part(b.mk.rod([TIP, TOP - 1.2, 11.1], [TIP, TOP - 1.2, 0.6], 0.06, YELLOW), b.mk.rod([TIP, TOP - 1.2, 0.6], [TIP, RY - 0.5, 0.6], 0.06, YELLOW));
-    b.label('Reach: from desk edge to tip', [13, TOP - 3.5, 11]);
-    b.label('Add washers to the hook', [HX + 0.5, HY - 6.5, 0]);
+    ruler(b, [0, RY + 1.06, 0], [TIP - 1, RY + 1.06, 0], [0, 1, 0]);
+    b.label('Reach: desk edge to tip', [12, RY + 3, 0]);
+    b.label('Add washers to the hook', [HX + 0.5, HY - 8, 0]);
     b.effect((s, t) => { load.position.z = s >= 6 ? Math.sin(t * 2) * 0.12 : 0; });
   },
 
@@ -295,9 +294,9 @@ export default {
       b.mk.box(0.4, 2.6, 26, CARD, [16.8, 2.3, 0]), b.mk.box(0.4, 2.6, 26, CARD, [-16.8, 2.3, 0]),
     );
     const marbles = b.part([[-9, -6], [9, -6], [-9, 6], [9, 6]].map(([x, z]) =>
-      b.mk.sphere(0.8, 0x4fb3d9, [x, 2.1, z], { rough: 0.15, opacity: 0.9 })));
+      b.mk.sphere(0.8, 0x4fb3d9, [x, 2.1, z], { rough: 0.15 })));
     marbles.matrixAutoUpdate = false;
-    const tray = ride(b.part(b.mk.box(26, 0.4, 20, 0xd2a878, [0, TRAY - 0.2, 0])));
+    const tray = ride(b.part(b.mk.box(26, 0.4, 20, 0xd2a878, [0, TRAY - 0.2, 0], null, { opacity: 0.6 })));
     b.label('Box lid', [-15, 4.6, 13]);
     b.label('Cardboard tray rolling on 4 marbles', [0, 6, 0]);
 
@@ -394,9 +393,9 @@ export default {
     b.part(b.mk.box(18, 0.12, 14, 0x3f8fd0, [0, T + 0.06, BZ], null, { rough: 0.25 }));
     b.step(2, { only: true });
     ruler(b, [-9, T + BH + 0.08, BZ + 5], [9, T + BH + 0.08, BZ + 5], [0, 1, 0], 3);
-    b.label('Span: 18 cm creek', [0, T + BH + 2, BZ + 5]);
-    b.label('Must hold: 500 g', [-15, T + BH + 4.5, BZ]);
-    b.label('Budget: $20 at most', [15, T + BH + 4.5, BZ]);
+    b.label('Span: 18 cm creek', [0, T + 2, BZ + 9]);
+    b.label('Must hold: 500 g', [-19, T + BH + 5, BZ]);
+    b.label('Budget: $20 at most', [19, T + BH + 5, BZ]);
 
     // 3: two sketched designs with costs
     b.step(3);
@@ -407,8 +406,8 @@ export default {
       [[-4.5, 2.2], [-4.5, 0.4]], [[4.5, 2.2], [4.5, 0.4]], [[-1.5, 2.2], [-1.5, 0.4]], [[1.5, 2.2], [1.5, 0.4]],
     ]);
     b.step(3, { only: true });
-    b.label('Design A: truss — $14', [-23, T + 3, CZ]);
-    b.label('Design B: stacked beam — $26', [-9, T + 6, CZ]);
+    b.label('Design A: truss — $14', [-27, T + 7, CZ]);
+    b.label('Design B: stacked beam — $26', [-5, T + 2, CZ + 4]);
 
     // 4: pick one
     b.step(4);
@@ -431,7 +430,7 @@ export default {
     const fin = bridge(b, M, P);
     b.part(fin.side(-3), fin.side(3, 1), fin.cross(), fin.deck());
     const stick = snapStick(b, M(7.5, 0, 3), 7.5);
-    const stacks = [0, -2.3, 2.3].map((x) => b.weights([x, T + BH + 0.5 + fin.deckTop, BZ], 6));
+    const stacks = [0, -2.3, 2.3].map((x) => b.weights([x, T + BH + 0.5 + fin.deckTop, BZ], 9));
     loadTest(b, stacks, stick, 6, 0.85);
     b.label('First the required 500 g…', [0, T + BH + 10, BZ]);
     b.label('…then keep adding until it fails', [0, T + 3.5, BZ + 6]);
