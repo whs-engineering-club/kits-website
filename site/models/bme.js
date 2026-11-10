@@ -11,11 +11,11 @@ const grp = (pos, rot, ...meshes) => {
   const g = new THREE.Group();
   g.position.set(pos[0], pos[1], pos[2]);
   if (rot) g.rotation.set(...rot);
-  meshes.flat().filter(Boolean).forEach((m) => g.add(m));
+  meshes.flat(Infinity).filter(Boolean).forEach((m) => g.add(m));
   return g;
 };
 // Add meshes as one step-tagged part, parented to a hinge/group instead of the scene root.
-const put = (b, parent, ...meshes) => { const p = b.part(...meshes); parent.add(p); return p; };
+const put = (b, parent, ...meshes) => { const p = b.part(meshes.flat(Infinity)); parent.add(p); return p; };
 // n points spread over a disc of radius R
 const scatter = (n, R, fn) => Array.from({ length: n }, (_, i) => {
   const a = i * 2.4, r = R * Math.sqrt((i + 0.5) / n);
@@ -186,12 +186,12 @@ export default {
     b.label('Poke small holes in the bottom', [A[0], T + 11.5, 0]);
 
     b.step(2, { until: 3 }); filterCup(b, A, true); LAYER.paper(b, A); LAYER.cotton(b, A);
-    b.label('Cotton balls on top of it', [A[0] + 8.5, T + 3.4, 0]);
+    b.label('Cotton balls on top of it', [A[0] + 10, T + 4.5, 0]);
     b.label('Coffee filter first', [A[0] - 7.5, T + 0.6, 2]);
     b.step(3, { until: 3 }); LAYER.carbon(b, A); LAYER.sand(b, A); LAYER.gravel(b, A);
     b.label('3. Gravel on top', [A[0] + 8.5, T + 9, 0]);
-    b.label('2. Sand', [A[0] - 7.5, T + 5.6, 0]);
-    b.label('1. Activated carbon', [A[0] + 9.5, T + 2.6, 0]);
+    b.label('2. Sand', [A[0] - 7.5, T + 3.6, 0]);
+    b.label('1. Activated carbon', [A[0] + 9.5, T + 1.4, 0]);
 
     b.step(4); filterCup(b, S, true); ['paper', 'cotton', 'carbon', 'sand', 'gravel'].forEach((k) => LAYER[k](b, S));
     b.label('Filter cup sits in the second cup', [S[0], S[1] + 13.5, 0]);
@@ -204,19 +204,19 @@ export default {
     b.add(measuringCup(b, [S[0] - 10.1, S[1] + 14.2, 0], [0, 0, -1.2], 0));
     b.tube([[S[0] - 1.5, S[1] + 13.9, 0], [S[0] - 0.7, S[1] + 12.6, 0], [S[0] - 0.4, S[1] + 11, 0], [S[0] - 0.35, S[1] + 9, 0]], 0.3, DIRTY, { opacity: 0.9 });
     b.label('Pour slowly', [S[0] - 6, S[1] + 18.5, 0]);
-    b.label('Start the stopwatch', [-3, T + 2.5, 8]);
-    b.step(6); const watch = b.add(stopwatch(b, [-3, T, 8]));
+    b.label('Start the stopwatch', [0, T + 2.5, 8]);
+    b.step(6); const watch = b.add(stopwatch(b, [0, T, 8]));
     const water = filterTest(b, B, 6);
 
     b.step(7); b.add(measuringCup(b, A, null, 0));
-    b.label('Dripping stops: stop the timer', [-3, T + 2.5, 8]);
-    b.label('Measure how much came through', [B[0] + 9, T + 4, 0]);
+    b.label('Dripping stops: stop the timer', [0, T + 2.5, 8]);
+    b.label('Measure how much came through', [B[0] + 10, T + 8, 0]);
 
     b.step(8);
     b.add(turbidityChart(b, [-9, T, 8.5]));
-    b.part(b.mk.box(0.9, 0.08, 5.5, 0xf0e3a0, [3.5, T + 0.04, 8.5]), b.mk.box(0.9, 0.1, 1.3, GREEN, [3.5, T + 0.05, 6.4]));
+    b.part(b.mk.box(0.9, 0.08, 5.5, 0xf0e3a0, [5, T + 0.04, 8.5]), b.mk.box(0.9, 0.1, 1.3, GREEN, [5, T + 0.05, 6.4]));
     b.label('Compare with the turbidity chart', [-9, T + 2, 8.5]);
-    b.label('Test the pH', [4.5, T + 1.2, 9.5]);
+    b.label('Test the pH', [6, T + 1.2, 9.5]);
 
     b.effect((s, t) => {
       water(s, t);
@@ -237,14 +237,14 @@ export default {
     b.step(1);
     L.forEach((len, i) => put(b, h[i], b.mk.box(W, len - 0.14, TH, CARD, [0, len / 2, 0]),
       i ? b.mk.box(W, 0.16, 0.06, CARD_D, [0, 0, TH / 2 + 0.02]) : null));
-    b.label('Score two lines: three segments', [0, 25.5, 0]);
-    b.label('Fold along the lines', [8, 12, 0]);
+    b.label('Score two lines: three segments', [-10, 19, 0]);
+    b.label('Fold along the lines', [9, 11, 0]);
 
     b.step(2);
     L.forEach((len, i) => put(b, h[i],
       b.mk.rod([0, len * 0.22, SZ], [0, len * 0.78, SZ], 0.5, STRAW),
-      b.mk.box(W * 0.8, 1.5, 1.1, TAPE, [0, len / 2, TH / 2 + 0.55], null, { opacity: 0.5 })));
-    b.label('Straw piece taped to each segment', [0, 25.5, 0]);
+      b.mk.box(W * 0.8, 1.5, 1.1, TAPE, [0, len / 2, TH / 2 + 0.55], null, { opacity: 0.8 })));
+    b.label('Straw piece taped to each segment', [-10, 19, 0]);
     b.label('Palm side', [8, 8, 0]);
 
     b.step(3);
@@ -255,13 +255,13 @@ export default {
       [h[1], v3(0, L[1] * 0.22, SZ)], [h[1], v3(0, L[1] * 0.78, SZ)],
       [h[2], v3(0, L[2] * 0.22, SZ)], [h[2], v3(0, L[2] * 0.78, SZ)], [h[2], v3(0, L[2] - 0.7, TH / 2 + 0.12)],
     ], BLUE, 0.14);
-    b.label('Thread string through all 3 straws', [0, 25.5, 0]);
+    b.label('Thread string through all 3 straws', [-10, 19, 0]);
 
     b.step(4);
     put(b, h[2], b.mk.box(W * 0.6, 1.3, 0.3, 0xffffff, [0, L[2] - 0.8, TH / 2 + 0.15]));
     const loop = b.mk.torus(1, 0.14, BLUE, [0, 0.2, 11], [Math.PI / 2, 0, 0]);
     put(b, root, loop);
-    b.label('Tape or tie the string at the fingertip', [0, 25.5, 0]);
+    b.label('Tape or tie the string at the fingertip', [-11, 21, 0]);
 
     b.step(5);
     const BZ = -TH / 2 - 0.3;
@@ -271,17 +271,17 @@ export default {
     ], RED, 0.24);
     put(b, h[0], b.mk.box(W * 0.7, 1.4, 0.3, 0xffffff, [0, 2.6, BZ - 0.1]));
     put(b, h[2], b.mk.box(W * 0.7, 1.4, 0.3, 0xffffff, [0, 3.6, BZ - 0.1]));
-    b.label('Rubber band taped along the back', [0, 25.5, 0]);
+    b.label('Rubber band taped along the back', [-10, 19, 0]);
 
     b.step(6, { only: true });
     put(b, root, b.mk.rod([3, 0.5, 7.5], [3, 0.5, 12], 0.22, YELLOW), b.mk.cyl(0.8, 1.8, YELLOW, [3, 0.5, 12.8], { r2: 0.02, rot: [Math.PI / 2, 0, 0] }));
-    b.label('Pull the string: the finger curls', [0, 25.5, 0]);
-    b.label('Let go: the band straightens it', [0, 1, 0]);
+    b.label('Pull the string: the finger curls', [-9, 17, 0]);
+    b.label('Let go: the band straightens it', [-10, 6, 0]);
 
     const ease = easer();
     b.effect((s, t) => {
       const k = ease(t);
-      const yaw = s === 5 ? FACE + Math.PI * 0.82 : s === 6 ? FACE + 1.15 : FACE;
+      const yaw = s === 5 ? FACE + Math.PI * 0.82 : s === 6 ? FACE + 0.95 : FACE;
       root.rotation.y += (yaw - root.rotation.y) * k;
       const pull = s === 6 ? Math.min(1, Math.max(0, 0.5 - 0.75 * Math.cos(t * 1.5))) : 0;
       const a = (s >= 1 && s < 5 ? 0.16 : 0.03) + pull * 1.15;
@@ -335,9 +335,9 @@ export default {
     F.forEach((f) => {
       f.lens.forEach((len, i) => put(b, f.h[i],
         b.mk.rod([0, len * 0.2, Z], [0, len * 0.8, Z], 0.3, STRAW),
-        b.mk.box(f.w * 0.85, 0.55, 0.7, TAPE, [0, len / 2, TH / 2 + 0.35], null, { opacity: 0.5 })));
+        b.mk.box(f.w * 0.85, 0.55, 0.7, TAPE, [0, len / 2, TH / 2 + 0.35], null, { opacity: 0.8 })));
       const mid = f.palm[0].clone().lerp(f.palm[1], 0.5);
-      put(b, root, b.mk.rod(f.palm[0], f.palm[1], 0.3, STRAW), b.mk.box(1.8, 0.6, 0.7, TAPE, [mid.x, mid.y, TH / 2 + 0.35], null, { opacity: 0.5 }));
+      put(b, root, b.mk.rod(f.palm[0], f.palm[1], 0.3, STRAW), b.mk.box(1.8, 0.6, 0.7, TAPE, [mid.x, mid.y, TH / 2 + 0.35], null, { opacity: 0.8 }));
     });
     b.label('Short straws between the joints', face(-10, 23, 1));
     b.label('One longer straw per finger on the palm', face(-9, 11.5, 1));
@@ -363,12 +363,12 @@ export default {
 
     b.step(7, { only: true });
     b.label('Pull the loops together: the hand grips', [0, 28.5, 0]);
-    b.label('Pull one loop: one finger curls', face(10, 4, 2));
+    b.label('Pull one loop: one finger curls', face(9, 6, 2));
 
     const ease = easer();
     b.effect((s, t) => {
       const k = ease(t);
-      root.rotation.y += ((s === 7 ? FACE + 0.75 : FACE) - root.rotation.y) * k;
+      root.rotation.y += ((s === 7 ? FACE + 0.5 : FACE) - root.rotation.y) * k;
       const u = t % 11;
       F.forEach((f, i) => {
         let c = 0;
@@ -428,8 +428,8 @@ export default {
       hinge.add(b.mk.cyl(2.65, 0.16, CARD, [0, 0.1, 2.55]), b.mk.box(2.2, 0.18, 0.7, TAPE, [0, 0.1, 0], null, { opacity: 0.7 }));
       return b.add(hinge);
     });
-    b.label('7 cups in a row, a lid flap on each', [0, T + 9.5, OZ]);
-    b.label('Day labels in large letters', [0, T + 0.4, OZ + 5]);
+    b.label('7 cups in a row, a lid flap on each', [-7, T + 9.5, OZ]);
+    b.label('Day labels in large letters', [15, T + 7.5, OZ]);
 
     // 5: assistive grip
     b.step(5);
@@ -441,7 +441,7 @@ export default {
     const glove = mitten(b, [0.8, 2.3, 0]);
     b.add(grp([PX, T + 1.47, PZ], null, glove));
     b.step(6, { only: true });
-    b.label('Glove test: can a classmate use it?', [PX - 1, T + 9, PZ]);
+    b.label('Glove test: can a classmate use it?', [PX + 6, T + 9.5, PZ]);
     b.label('No hints from you', [PX - 12, T + 1.5, PZ + 3]);
 
     b.step(7);
@@ -497,7 +497,7 @@ export default {
     b.label('Improve it at least once', [S[0], S[1] + 13.5, S[2]]);
 
     b.step(7);
-    const BX = -6, panel = (x, y, title, extra) => [
+    const BX = -11, panel = (x, y, title, extra) => [
       b.mk.box(10.6, 5.6, 0.08, PAPER, [x, y, 0.2]),
       textPlane(title, 9, 1.5, [x, y + 1.8, 0.26], null, { size: 0.8 }),
       extra ?? [0, 1].map((i) => b.mk.box(8 - i * 2, 0.22, 0.04, INK, [x - i, y + 0.2 - i * 1.1, 0.26])),
