@@ -1,6 +1,6 @@
 # WHS Engineering Kits website
 
-A site for the club's four low-cost engineering kits (ECE, Mechanical, Aerospace, Biomedical): what is in each kit, where to buy the parts, a step-by-step build guide for every project, and the three-class Intro to Arduino mini-unit. It also has a backend that takes kit requests from schools and gives officers a page to manage them.
+A site for the club's four low-cost engineering kits (ECE, Mechanical, Aerospace, Biomedical): what is in each kit, where to buy the parts, a step-by-step build guide with an interactive 3D model for every project, and the three-class Intro to Arduino mini-unit. It also has a backend that takes kit requests from schools and gives officers a page to manage them.
 
 ## Layout
 
@@ -8,6 +8,9 @@ A site for the club's four low-cost engineering kits (ECE, Mechanical, Aerospace
 | --- | --- |
 | `data/kits.mjs` | All kit content. Edit this, then run `npm run build`. |
 | `site/` | The frontend (plain HTML/CSS/JS, no build tools). `site/data.js` is generated. |
+| `site/viewer.js` | The 3D step viewer (three.js, vendored in `site/vendor/`). |
+| `site/models/<kit>.js` | One 3D model per project. Each part is tagged with the step that adds it. |
+| `scripts/shots.cjs` | Renders every step of a model to one image: `node scripts/shots.cjs ece/led-circuit out.png`. |
 | `server/server.mjs` | The backend: JSON API + SQLite storage + serves `site/`. No dependencies. |
 | `.github/workflows/pages.yml` | Publishes `site/` to GitHub Pages on every push to `main`. |
 
@@ -48,4 +51,4 @@ To connect the backend: run `npm start` on any host that supports Node 22 and a 
 
 ## Content sources
 
-Kit contents, concepts, project lists, parts links and the Arduino lessons come from the club's planning spreadsheet. The step-by-step build guides and example sketches were written for this site and should be tried out by the club before they are used in a classroom.
+Kit contents, concepts, project lists, parts links and the Arduino lessons come from the club's planning spreadsheet. The step-by-step build guides, example sketches and 3D models were written for this site (the models are drawn in code as diagrams, not CAD files of real parts) and should be tried out by the club before they are used in a classroom.

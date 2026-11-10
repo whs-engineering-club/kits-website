@@ -1,37 +1,50 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Engineering Kits – WHS Engineering Club</title>
-  <meta name="description" content="Low-cost ECE, mechanical, aerospace and biomedical engineering kits with step-by-step build guides for classrooms.">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Engineering Kits · WHS Engineering Club</title>
+<meta name="description" content="Low-cost ECE, mechanical, aerospace and biomedical engineering kits with 3D step-by-step build guides for classrooms.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","three/addons/controls/":"./vendor/"}}</script>
 </head>
 <body>
-  <a class="skip" href="#main">Skip to content</a>
-  <header class="nav">
-    <div class="wrap nav-inner">
-      <a class="brand" href="#/"><span class="brand-mark" aria-hidden="true"></span>WHS<span class="hide-s">&nbsp;Engineering</span>&nbsp;Kits</a>
-      <nav aria-label="Main">
-        <a href="#/kits" data-nav="kits">Kits</a>
-        <a href="#/curriculum" data-nav="curriculum">Curriculum</a>
-        <a class="btn btn-small" href="#/request" data-nav="request">Request<span class="hide-s">&nbsp;kits</span></a>
-      </nav>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#/" aria-label="WHS Kits home">
+      <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7z"/><path d="M3.5 7 12 11.5 20.5 7M12 11.5v10" fill="none"/></svg>
+      <span>WHS Kits</span>
+    </a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="#/kits" data-nav="kits">Kits</a>
+      <a href="#/curriculum" data-nav="curriculum">Curriculum</a>
+      <a href="#/request" data-nav="request">Request kits</a>
+      <a href="https://github.com/whs-engineering-club/kits-website" target="_blank" rel="noopener">GitHub ↗</a>
+    </nav>
+    <a class="btn btn-small" href="#/kits">Start building <span aria-hidden="true">→</span></a>
+  </div>
+</header>
+
+<main id="main" tabindex="-1"></main>
+
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <a class="brand" href="#/"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7z"/><path d="M3.5 7 12 11.5 20.5 7M12 11.5v10" fill="none"/></svg><span>WHS Kits</span></a>
+    <div class="foot-cols">
+      <div><h4>Kits</h4><a href="#/kits/ece">Electrical &amp; Computer</a><a href="#/kits/meche">Mechanical</a><a href="#/kits/aero">Aerospace</a><a href="#/kits/bme">Biomedical</a></div>
+      <div><h4>Club</h4><a href="#/curriculum">Curriculum</a><a href="#/request">Request kits</a><a href="#/admin">Officer login</a></div>
     </div>
-  </header>
-  <main id="main" tabindex="-1"></main>
-  <footer class="footer">
-    <div class="wrap footer-inner">
-      <span>Built by the WHS Engineering Club.</span>
-      <span id="api-status" class="status"></span>
-      <a href="#/admin">Officer login</a>
-    </div>
-  </footer>
-  <script src="config.js"></script>
-  <script src="data.js"></script>
-  <script src="app.js"></script>
+    <p class="muted small"><span class="status-dot" id="api-dot"></span><span id="api-status"></span></p>
+  </div>
+</footer>
+
+<script src="config.js"></script>
+<script src="data.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>

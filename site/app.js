@@ -1,373 +1,520 @@
-(() => {
-  const DATA = window.KITS_DATA;
-  const API = (window.KITS_CONFIG?.API_BASE || '').replace(/\/$/, '');
-  const main = document.getElementById('main');
-  const state = { live: false, adminConfigured: false };
+const DATA = window.KITS_DATA;
+const API = (window.KITS_CONFIG?.API_BASE || '').replace(/\/$/, '');
+const main = document.getElementById('main');
+const state = { live: false };
+let cleanup = []; // disposers for the current page (3D viewers, timers, listeners)
 
-  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const store = {
-    get(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } },
-    set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ } },
-  };
-  const session = {
-    get token() { try { return sessionStorage.getItem('kits-admin') || ''; } catch { return ''; } },
-    set token(v) { try { v ? sessionStorage.setItem('kits-admin', v) : sessionStorage.removeItem('kits-admin'); } catch { /* ignore */ } },
-  };
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const store = {
+  get(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } },
+  set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ } },
+};
+const session = {
+  get token() { try { return sessionStorage.getItem('kits-admin') || ''; } catch { return ''; } },
+  set token(v) { try { v ? sessionStorage.setItem('kits-admin', v) : sessionStorage.removeItem('kits-admin'); } catch { /* ignore */ } },
+};
 
-  async function api(path, { method = 'GET', body, token } = {}) {
-    const res = await fetch(API + path, {
-      method,
-      headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: body ? JSON.stringify(body) : undefined,
+async function api(path, { method = 'GET', body, token } = {}) {
+  const res = await fetch(API + path, {
+    method,
+    headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(json.error || `Request failed (${res.status})`), { status: res.status, fields: json.fields });
+  return json;
+}
+
+const kitById = (id) => DATA.kits.find((k) => k.id === id);
+const list = (items) => `<ul class="list">${items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>`;
+const totalProjects = DATA.kits.reduce((n, k) => n + k.projects.length, 0);
+const totalSteps = DATA.kits.reduce((n, k) => n + k.projects.reduce((m, p) => m + p.steps.length, 0), 0);
+const reached = (key) => { const v = store.get('kits-progress', {})[key]; return Array.isArray(v) ? v.length : (v || 0); };
+
+// ---------- 3D stepper (shared by the home demo and every guide page) ----------
+const stepperHtml = (extraHead = '') => `
+  <div class="viewer" data-viewer><p class="viewer-loading">Loading 3D model…</p></div>
+  <aside class="demo-side">
+    ${extraHead}
+    <ol class="step-list" data-steps></ol>
+    <div class="side-foot">
+      <div class="timer"><span data-now>1</span><small>/ <span data-total>1</span></small></div>
+      <div class="btns">
+        <button class="btn btn-small btn-ghost" data-prev aria-label="Previous step">← Back</button>
+        <button class="btn btn-small" data-next>Next <span aria-hidden="true">→</span></button>
+      </div>
+    </div>
+  </aside>`;
+
+async function mountStepper(root, kit, pr, { auto = false, remember = false } = {}) {
+  const key = `${kit.id}/${pr.id}`;
+  const viewerEl = root.querySelector('[data-viewer]');
+  const listEl = root.querySelector('[data-steps]');
+  const total = pr.steps.length;
+  let step = 1;
+  let viewer = null;
+  let timer = 0;
+  let dead = false;
+
+  root.querySelector('[data-total]').textContent = total;
+  listEl.innerHTML = pr.steps.map((s, i) => `<li><button class="step-btn" data-step="${i + 1}"><b>${String(i + 1).padStart(2, '0')}</b><span>${esc(s)}</span></button></li>`).join('');
+  const btns = [...listEl.querySelectorAll('.step-btn')];
+
+  function show(n, user = false) {
+    step = Math.max(1, Math.min(total, n));
+    if (user) stopAuto();
+    viewer?.setStep(step);
+    btns.forEach((b, i) => {
+      b.classList.toggle('done', i + 1 < step);
+      i + 1 === step ? b.setAttribute('aria-current', 'step') : b.removeAttribute('aria-current');
     });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw Object.assign(new Error(json.error || `Request failed (${res.status})`), { status: res.status, fields: json.fields });
-    return json;
+    const cur = btns[step - 1];
+    listEl.scrollTo({ top: cur.offsetTop - listEl.offsetTop - 40, behavior: 'smooth' });
+    root.querySelector('[data-now]').textContent = step;
+    root.querySelector('[data-prev]').disabled = step === 1;
+    root.querySelector('[data-next]').disabled = step === total;
+    if (remember && step > reached(key)) { const all = store.get('kits-progress', {}); all[key] = step; store.set('kits-progress', all); }
   }
+  function stopAuto() { clearInterval(timer); timer = 0; }
 
-  const kitById = (id) => DATA.kits.find((k) => k.id === id);
-  const list = (items) => `<ul class="list">${items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>`;
-  const totalProjects = DATA.kits.reduce((n, k) => n + k.projects.length, 0);
+  listEl.onclick = (e) => { const b = e.target.closest('.step-btn'); if (b) show(Number(b.dataset.step), true); };
+  root.querySelector('[data-prev]').onclick = () => show(step - 1, true);
+  root.querySelector('[data-next]').onclick = () => show(step + 1, true);
+  viewerEl.addEventListener('pointerdown', stopAuto);
+  show(1);
 
-  // ---------- views ----------
-  const kitCard = (k) => `
-    <a class="card kit-card k-${k.id}" href="#/kits/${k.id}">
-      <span class="kit-code">${esc(k.code)} KIT</span>
-      <h3>${esc(k.name)}</h3>
-      <p>${esc(k.tagline)}</p>
-      <span class="more">${k.projects.length} build guides →</span>
-    </a>`;
+  const dispose = () => { dead = true; stopAuto(); viewer?.dispose(); };
+  try {
+    const [{ mountViewer }, models] = await Promise.all([import('./viewer.js'), import(`./models/${kit.id}.js`)]);
+    if (dead) return dispose;
+    const build = models.default[pr.id];
+    if (!build) throw new Error('no model');
+    viewer = mountViewer(viewerEl, build, { step });
+    if (viewer) {
+      viewerEl.insertAdjacentHTML('beforeend', '<span class="viewer-hint">drag to rotate · scroll to zoom</span>');
+      if (auto && !matchMedia('(prefers-reduced-motion: reduce)').matches) timer = setInterval(() => show(step === total ? 1 : step + 1), 3800);
+    }
+  } catch {
+    if (!dead) viewerEl.innerHTML = '<p class="viewer-fallback">The 3D model could not be loaded. Follow the written steps on the right.</p>';
+  }
+  dispose.show = (n) => show(n, true);
+  dispose.next = () => show(step + 1, true);
+  dispose.prev = () => show(step - 1, true);
+  return dispose;
+}
 
-  function home() {
-    return `
+// ---------- views ----------
+const kitCard = (k) => `
+  <a class="kit-card reveal" href="#/kits/${k.id}">
+    <span class="kit-code">${esc(k.code)} KIT</span>
+    <h3>${esc(k.name)}</h3>
+    <p>${esc(k.tagline)}</p>
+    <pre class="mini">${k.projects.slice(0, 3).map((p, i) => `<span class="o">${String(i + 1).padStart(2, '0')}</span> ${esc(p.title.replace(/:.*/, ''))}`).join('\n')}
+<span class="m">+ ${k.projects.length - 3} more</span></pre>
+    <span class="more">${k.projects.length} build guides →</span>
+  </a>`;
+
+const FEATURED = [['ece', 'led-circuit', 'LED circuit'], ['meche', 'bridge', 'Truss bridge'], ['aero', 'balloon-rocket', 'Balloon rocket'], ['bme', 'water-filter', 'Water filter']];
+
+function home() {
+  return `
+  <section class="hero">
+    <div class="wrap hero-copy">
+      <p class="eyebrow"><span class="dot"></span> ${esc(DATA.site.club)} · ${DATA.kits.length} kits · ${totalProjects} builds</p>
+      <h1>Engineering kits you<br>build step by step.</h1>
+      <p class="lede">Low-cost kits for elementary and middle school classrooms. Every project comes with a 3D model that shows exactly what each step looks like, so any teacher can run it.</p>
+      <div class="hero-ctas">
+        <a class="btn" href="#/kits">Pick a kit <span aria-hidden="true">→</span></a>
+        <a class="link" href="#/request">Request kits for your school <span aria-hidden="true">→</span></a>
+      </div>
+    </div>
     <div class="wrap">
-      <div class="hero">
-        <p class="eyebrow">${esc(DATA.site.club)}</p>
-        <h1>Real engineering,<br>in a kit that costs a few dollars.</h1>
-        <p class="lead">${esc(DATA.site.mission)} Every kit comes with step-by-step guides, so any teacher can run it.</p>
-        <div class="hero-actions">
-          <a class="btn" href="#/kits">Explore the kits</a>
-          <a class="btn btn-ghost" href="#/request">Request kits for your school</a>
-        </div>
-        <div class="stats">
-          <div class="stat"><b>${DATA.kits.length}</b><span>engineering disciplines</span></div>
-          <div class="stat"><b>${totalProjects}</b><span>step-by-step build guides</span></div>
-          <div class="stat"><b>${DATA.curriculum.lessons.length}</b><span>ready-to-teach Arduino lessons</span></div>
-          <div class="stat"><b>$3–$5</b><span>per ECE student kit</span></div>
+      <div class="demo" id="home-demo">${stepperHtml(`
+        <div class="side-head"><span class="pulse"></span> Build guide <span class="muted" id="demo-kit"></span></div>
+        <div class="prompt-chips">${FEATURED.map(([k, p, label], i) => `<button class="chip${i ? '' : ' active'}" data-kit="${k}" data-project="${p}">${label}</button>`).join('')}</div>`)}
+      </div>
+      <p class="caption">A real guide from the site. It plays by itself; click a step or drag the model to take over. <a class="link" id="demo-open" href="#/kits/ece/led-circuit">Open this guide →</a></p>
+    </div>
+  </section>
+
+  <section class="strip">
+    <div class="wrap strip-inner">
+      <span class="muted">Covers</span>
+      ${DATA.kits.map((k) => `<a class="logo-pill" href="#/kits/${k.id}">${esc(k.name.replace(' Kit', ''))}</a>`).join('')}
+      <a class="logo-pill" href="#/curriculum">Intro to Arduino</a>
+    </div>
+  </section>
+
+  <section class="section" id="how">
+    <div class="wrap">
+      <p class="kicker">How it works</p>
+      <h2>See the build<br>before you build it.</h2>
+      <p class="sub">Written instructions leave a lot to guesswork. Each guide here pairs every step with a 3D model: the new part drops into place, the camera moves to it, and you can turn it around to see where everything connects.</p>
+      <div class="how-grid">
+        <article class="how-card reveal"><div class="how-num">01</div><h3>Open the kit</h3>
+          <p>Each kit page lists what goes in every student bag and what the classroom shares.</p>
+          <pre class="mini"><span class="m">ECE student kit · $3–$5</span>
+<span class="o">›</span> Mini breadboard
+<span class="o">›</span> 5 LEDs, 5 resistors
+<span class="o">›</span> Button, buzzer, sensor</pre></article>
+        <article class="how-card reveal"><div class="how-num">02</div><h3>Follow the 3D steps</h3>
+          <p>Click through the steps. The model shows what to add and labels where it goes.</p>
+          <pre class="mini"><span class="ok">✓</span> LED into two columns
+<span class="ok">✓</span> Resistor to the long leg
+<span class="o">&gt;&gt;</span> Battery + to the resistor
+<span class="m">   Battery − to the LED</span></pre></article>
+        <article class="how-card reveal"><div class="how-num">03</div><h3>Test, then go further</h3>
+          <p>Every guide ends with a test, the science behind it, and a challenge to push the design.</p>
+          <pre class="mini"><span class="m">Test</span>   pull one wire: LED off
+<span class="m">Why</span>    a circuit is a loop
+<span class="m">Next</span>   <span class="s">"add a second LED"</span></pre></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section-alt" id="kits">
+    <div class="wrap">
+      <p class="kicker">The kits</p>
+      <h2>Four kits.<br>Four kinds of engineering.</h2>
+      <p class="sub">Each one has a low-cost bag for every student and a shared classroom toolbox for the equipment that gets reused.</p>
+      <div class="kit-grid">${DATA.kits.map(kitCard).join('')}</div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <p class="kicker">In every guide</p>
+      <h2>Built so a teacher<br>can run it cold.</h2>
+      <div class="feat-grid">
+        <article class="feat reveal"><div class="feat-ico">◈</div><h3>3D model per step</h3><p>Rotate and zoom the build at every stage. New parts are highlighted and labelled.</p></article>
+        <article class="feat reveal"><div class="feat-ico">☰</div><h3>Exact materials</h3><p>A parts list for each project, drawn from the student kit and the classroom toolbox.</p></article>
+        <article class="feat reveal"><div class="feat-ico">✓</div><h3>A test that proves it</h3><p>Each build ends with a clear check, so students know whether it works.</p></article>
+        <article class="feat reveal"><div class="feat-ico">?</div><h3>The why</h3><p>A short plain-language explanation of the engineering idea behind the build.</p></article>
+        <article class="feat reveal"><div class="feat-ico">{ }</div><h3>Code included</h3><p>Microcontroller projects come with a complete, commented Arduino sketch.</p></article>
+        <article class="feat reveal"><div class="feat-ico">↗</div><h3>A capstone</h3><p>Every kit finishes with an open-ended project where students design their own solution.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section-alt stats-sec">
+    <div class="wrap stats">
+      <div class="stat reveal"><b>${DATA.kits.length}</b><span>engineering disciplines</span></div>
+      <div class="stat reveal"><b>${totalProjects}</b><span>projects with 3D build guides</span></div>
+      <div class="stat reveal"><b>${totalSteps}</b><span>modelled steps across all kits</span></div>
+      <div class="stat reveal"><b>$3–5</b><span>per ECE student kit</span></div>
+    </div>
+  </section>
+
+  <section class="section cta">
+    <div class="wrap cta-inner">
+      <h2>Bring a kit to your classroom.</h2>
+      <p class="sub">Start with any guide today, or ask the club for kits for your students.</p>
+      <div class="hero-ctas center">
+        <a class="btn" href="#/kits">Browse the kits <span aria-hidden="true">→</span></a>
+        <a class="link" href="#/request">Request kits <span aria-hidden="true">→</span></a>
+      </div>
+    </div>
+  </section>`;
+}
+
+function bindHome() {
+  const demo = document.getElementById('home-demo');
+  let dispose = null;
+  let token = 0;
+  async function load(kitId, projectId) {
+    const mine = ++token;
+    dispose?.();
+    const kit = kitById(kitId);
+    const pr = kit.projects.find((p) => p.id === projectId);
+    document.getElementById('demo-kit').textContent = `· ${kit.code} kit`;
+    document.getElementById('demo-open').href = `#/kits/${kitId}/${projectId}`;
+    demo.querySelector('[data-viewer]').innerHTML = '<p class="viewer-loading">Loading 3D model…</p>';
+    const d = await mountStepper(demo, kit, pr, { auto: true });
+    if (mine !== token) d(); else dispose = d;
+  }
+  demo.querySelector('.prompt-chips').onclick = (e) => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    demo.querySelectorAll('.chip').forEach((c) => c.classList.toggle('active', c === chip));
+    load(chip.dataset.kit, chip.dataset.project);
+  };
+  load(...FEATURED[0]);
+  cleanup.push(() => { token++; dispose?.(); });
+}
+
+function kitsIndex() {
+  return `<div class="wrap">
+    <p class="crumbs">Kits</p>
+    <div class="page-head"><h1>Pick a kit.</h1>
+      <p class="lede">Choose a discipline to see what is in the kit and how to build every project, step by step in 3D.</p></div>
+    <div class="kit-grid" style="margin-top:36px">${DATA.kits.map(kitCard).join('')}</div>
+  </div>`;
+}
+
+function kitPage(k) {
+  const sourcing = k.sourcing ? `
+    <div class="block"><h2>Where to buy the parts</h2>
+      <p class="sub">Links the club collected for single packs and bulk orders. Prices and stock change, so check before ordering.</p>
+      <div class="source-grid">${k.sourcing.map((s) => `
+        <div class="panel source"><h3>${esc(s.part)}</h3>
+          ${s.links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.label)} ↗${l.note ? `<br><small>${esc(l.note)}</small>` : ''}</a>`).join('')}
+        </div>`).join('')}</div>
+    </div>` : '';
+  const lessons = DATA.curriculum.kit === k.id ? `
+    <div class="block"><a class="kit-card" href="#/curriculum"><span class="kit-code">LESSON PLANS</span>
+      <h3>${esc(DATA.curriculum.title)}</h3><p>${esc(DATA.curriculum.summary)}</p>
+      <span class="more">Open the lesson plans →</span></a></div>` : '';
+  return `<div class="wrap">
+    <p class="crumbs"><a href="#/kits">Kits</a> / ${esc(k.code)}</p>
+    <div class="page-head">
+      <h1>${esc(k.name)}</h1>
+      <p class="lede">${esc(k.tagline)}</p>
+      <div class="badges">
+        <span class="badge badge-k">${esc(k.code)} KIT</span>
+        ${k.cost ? `<span class="badge">${esc(k.cost)}</span>` : ''}
+        <span class="badge">${k.projects.length} projects</span>
+      </div>
+    </div>
+    <div class="block"><h2>Build guides</h2>
+      <p class="sub">Each one opens a 3D model you step through. Work in order: every project builds on the last.</p>
+      <div class="project-list">${k.projects.map((pr, i) => {
+        const d = reached(`${k.id}/${pr.id}`);
+        return `<a class="project-row" href="#/kits/${k.id}/${pr.id}">
+          <span class="n">${String(i + 1).padStart(2, '0')}</span>
+          <span><h3>${esc(pr.title)}</h3><p>${esc(pr.summary)}</p></span>
+          <span class="meta">${esc(pr.level)} · ${esc(pr.time)} · ${d ? `${d}/${pr.steps.length} steps` : `${pr.steps.length} steps`}</span>
+        </a>`;
+      }).join('')}</div>
+    </div>
+    <div class="block"><h2>What's inside</h2>
+      <div class="panels">
+        <div class="panel"><h3>Student kit</h3><p>One per student or pair.</p>${list(k.studentKit)}</div>
+        <div class="panel"><h3>Shared classroom toolbox</h3><p>One set per classroom, reused every session.</p>${list(k.classroomToolbox)}</div>
+      </div>
+    </div>
+    <div class="block"><h2>Concepts covered</h2>
+      <div class="tags">${k.concepts.map((c) => `<span class="badge">${esc(c)}</span>`).join('')}</div>
+    </div>
+    ${lessons}${sourcing}
+    <div class="block"><a class="btn" href="#/request?kit=${k.id}">Request this kit <span aria-hidden="true">→</span></a></div>
+  </div>`;
+}
+
+function projectPage(k, pr) {
+  const i = k.projects.indexOf(pr);
+  const prev = k.projects[i - 1];
+  const next = k.projects[i + 1];
+  return `<div class="wrap">
+    <p class="crumbs"><a href="#/kits">Kits</a> / <a href="#/kits/${k.id}">${esc(k.code)}</a> / Project ${i + 1}</p>
+    <div class="page-head">
+      <h1>${esc(pr.title)}</h1>
+      <p class="lede">${esc(pr.summary)}</p>
+      <div class="badges"><span class="badge badge-k">${esc(pr.level)}</span><span class="badge">${esc(pr.time)}</span><span class="badge">${pr.steps.length} steps</span></div>
+    </div>
+    <div class="demo flush" id="guide">${stepperHtml('<div class="side-head"><span class="pulse"></span> Steps <span class="muted">· use ← → keys</span></div>')}</div>
+    <div class="block guide-below">
+      <aside class="panel"><h3>You will need</h3>${list(pr.materials)}</aside>
+      <div>
+        ${pr.code ? `<h2>Code</h2><pre class="code"><code>${esc(pr.code)}</code></pre>` : ''}
+        ${pr.note ? `<div class="callout" style="margin-top:14px"><strong>Note</strong>${esc(pr.note)}</div>` : ''}
+        <h2>Test it</h2>
+        <div class="callout"><strong>How you know it works</strong>${esc(pr.test)}</div>
+        <h2>What's going on?</h2>
+        <p>${esc(pr.why)}</p>
+        ${pr.extend ? `<h2>Go further</h2><div class="callout"><strong>Challenge</strong>${esc(pr.extend)}</div>` : ''}
+        <div class="pager">
+          ${prev ? `<a class="btn btn-ghost" href="#/kits/${k.id}/${prev.id}">← ${esc(prev.title)}</a>` : '<span></span>'}
+          ${next ? `<a class="btn" href="#/kits/${k.id}/${next.id}">Next: ${esc(next.title)} →</a>` : `<a class="btn" href="#/kits/${k.id}">Back to the ${esc(k.code)} kit</a>`}
         </div>
       </div>
-      <section id="kits">
-        <div class="section-head"><h2>Four kits, four kinds of engineering</h2>
-          <p>Each kit has a low-cost bag for every student and a shared classroom toolbox for the equipment that gets reused.</p></div>
-        <div class="grid">${DATA.kits.map(kitCard).join('')}</div>
-      </section>
-      <section>
-        <div class="section-head"><h2>How it works</h2></div>
-        <div class="grid steps3">
-          <div class="card"><h3>Pick a kit</h3><p>See exactly what is inside each student kit and what the classroom shares.</p></div>
-          <div class="card"><h3>Follow the guide</h3><p>Every project lists materials, numbered steps, a test, and the science behind it. Tick steps off as you go.</p></div>
-          <div class="card"><h3>Finish with a capstone</h3><p>Each kit ends in an open-ended final project where students design their own solution.</p></div>
+    </div>
+  </div>`;
+}
+
+async function bindProject(k, pr) {
+  let alive = true;
+  let stepper = null;
+  const onKey = (e) => {
+    if (!stepper || e.target.closest('input, textarea, select')) return;
+    if (e.key === 'ArrowRight') stepper.next();
+    if (e.key === 'ArrowLeft') stepper.prev();
+  };
+  document.addEventListener('keydown', onKey);
+  cleanup.push(() => { alive = false; document.removeEventListener('keydown', onKey); stepper?.(); });
+  const s = await mountStepper(document.getElementById('guide'), k, pr, { remember: true });
+  if (alive) stepper = s; else s();
+}
+
+function curriculumPage() {
+  const c = DATA.curriculum;
+  return `<div class="wrap">
+    <p class="crumbs"><a href="#/kits/${c.kit}">ECE kit</a> / Curriculum</p>
+    <div class="page-head"><h1>${esc(c.title)}</h1><p class="lede">${esc(c.summary)}</p></div>
+    <div class="block">${c.lessons.map((l, i) => `
+      <details class="lesson"${i === 0 ? ' open' : ''}>
+        <summary><span class="n">CLASS ${l.n}</span><h3>${esc(l.title)}
+          ${l.length ? `<small>${esc(l.length)}${l.topic ? ` · ${esc(l.topic)}` : ''}</small>` : ''}</h3></summary>
+        <div class="lesson-body">
+          <h4>Goal</h4><p>${esc(l.goal)}</p>
+          <h4>Big idea</h4><p>${esc(l.bigIdea)}</p>
+          ${l.materials ? `<h4>Materials</h4><p>${esc(l.materials.join(', '))}</p>` : ''}
+          ${l.objectives ? `<h4>Learning objectives</h4><ul>${l.objectives.map((o) => `<li>${esc(o)}</li>`).join('')}</ul>` : ''}
+          <h4>Vocabulary</h4><dl>${l.vocabulary.map(([t, d]) => `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>`).join('')}</dl>
+          ${l.sections.map((s) => `<h4>${esc(s.heading)}</h4>${s.body.map((b) => `<p>${esc(b)}</p>`).join('')}`).join('')}
         </div>
-      </section>
-      <section>
-        <a class="card" href="#/curriculum">
-          <span class="kit-code">FOR TEACHERS</span>
-          <h3>${esc(DATA.curriculum.title)}</h3>
-          <p>${esc(DATA.curriculum.summary)}</p>
-          <span class="more">Open the lesson plans →</span>
-        </a>
-      </section>
-    </div>`;
-  }
+      </details>`).join('')}
+      <p class="muted" style="margin-top:20px">See these circuits in 3D: <a class="link" href="#/kits/ece/led-circuit">LED circuit →</a> <a class="link" href="#/kits/ece/mcu-led">LED controlled by code →</a></p>
+    </div>
+  </div>`;
+}
 
-  function kitsIndex() {
-    return `<div class="wrap">
-      <div class="page-head" style="padding-top:40px"><h1>The kits</h1>
-        <p class="lead">Choose a discipline to see what is in the kit and how to build every project.</p></div>
-      <section><div class="grid grid-2">${DATA.kits.map(kitCard).join('')}</div></section>
-    </div>`;
-  }
-
-  function kitPage(k) {
-    const done = store.get(`kits-progress`, {});
-    const sourcing = k.sourcing ? `
-      <section>
-        <div class="section-head"><h2>Where to buy the parts</h2><p>Links the club collected for single packs and bulk orders. Prices and stock change, so check before ordering.</p></div>
-        <div class="grid">${k.sourcing.map((s) => `
-          <div class="card source"><h3>${esc(s.part)}</h3>
-            ${s.links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.label)} ↗${l.note ? `<br><small>${esc(l.note)}</small>` : ''}</a>`).join('')}
-          </div>`).join('')}</div>
-      </section>` : '';
-    const lessons = DATA.curriculum.kit === k.id ? `
-      <section><a class="card" href="#/curriculum"><span class="kit-code">LESSON PLANS</span>
-        <h3>${esc(DATA.curriculum.title)}</h3><p>${esc(DATA.curriculum.summary)}</p>
-        <span class="more">Open the lesson plans →</span></a></section>` : '';
-    return `<div class="wrap k-${k.id}">
-      <p class="crumbs"><a href="#/kits">Kits</a> / ${esc(k.code)}</p>
-      <div class="page-head">
-        <h1>${esc(k.name)}</h1>
-        <p class="lead">${esc(k.tagline)}</p>
-        <div class="badges">
-          <span class="badge badge-k">${esc(k.code)} KIT</span>
-          ${k.cost ? `<span class="badge">${esc(k.cost)}</span>` : ''}
-          <span class="badge">${k.projects.length} projects</span>
+function requestPage(query) {
+  const pre = query.get('kit');
+  const offline = !state.live ? `<div class="notice" role="status" style="margin-bottom:20px">
+    Online requests are not available right now because the club's server is not connected. The kits and guides all work in the meantime.</div>` : '';
+  return `<div class="wrap">
+    <p class="crumbs">Request</p>
+    <div class="page-head"><h1>Request kits.</h1>
+      <p class="lede">Teachers and schools: tell us which kit you want and how many students you have. A club officer will follow up by email.</p></div>
+    <div class="block">${offline}
+      <form class="form" id="request-form" novalidate>
+        <label>Your name<input name="name" autocomplete="name" required maxlength="100"><span class="field-err" data-err="name"></span></label>
+        <label>Email<input name="email" type="email" autocomplete="email" required maxlength="200"><span class="field-err" data-err="email"></span></label>
+        <label>School or organization<input name="school" autocomplete="organization" required maxlength="200"><span class="field-err" data-err="school"></span></label>
+        <div class="row">
+          <label>Kit<select name="kitId">${DATA.kits.map((k) => `<option value="${k.id}"${k.id === pre ? ' selected' : ''}>${esc(k.name)}</option>`).join('')}</select><span class="field-err" data-err="kitId"></span></label>
+          <label>Students<input name="quantity" type="number" min="1" max="500" value="30" required><span class="field-err" data-err="quantity"></span></label>
         </div>
-      </div>
-      <section>
-        <div class="section-head"><h2>What's inside</h2></div>
-        <div class="grid grid-2">
-          <div class="card"><h3>Student kit</h3><p>One per student or pair.</p>${list(k.studentKit)}</div>
-          <div class="card"><h3>Shared classroom toolbox</h3><p>One set per classroom, reused every session.</p>${list(k.classroomToolbox)}</div>
-        </div>
-      </section>
-      <section>
-        <div class="section-head"><h2>Concepts covered</h2></div>
-        <div class="chips">${k.concepts.map((c) => `<span class="chip">${esc(c)}</span>`).join('')}</div>
-      </section>
-      <section>
-        <div class="section-head"><h2>Build guides</h2><p>Work through them in order — each one builds on the last.</p></div>
-        <div class="project-list">${k.projects.map((pr, i) => {
-          const d = (done[`${k.id}/${pr.id}`] || []).length;
-          return `<a class="card project-row" href="#/kits/${k.id}/${pr.id}">
-            <span class="n">${String(i + 1).padStart(2, '0')}</span>
-            <span><h3>${esc(pr.title)}</h3><p>${esc(pr.summary)}</p></span>
-            <span class="meta">${esc(pr.level)} · ${esc(pr.time)}${d ? ` · ${d}/${pr.steps.length} done` : ''}</span>
-          </a>`;
-        }).join('')}</div>
-      </section>
-      ${lessons}${sourcing}
-      <section><a class="btn" href="#/request?kit=${k.id}">Request this kit</a></section>
-    </div>`;
-  }
+        <label>Anything else we should know? (optional)<textarea name="notes" rows="4" maxlength="2000"></textarea><span class="field-err" data-err="notes"></span></label>
+        <div><button class="btn" type="submit"${state.live ? '' : ' disabled'}>Send request</button></div>
+        <div id="form-msg" role="status" aria-live="polite"></div>
+      </form>
+    </div>
+  </div>`;
+}
 
-  function projectPage(k, pr) {
-    const i = k.projects.indexOf(pr);
-    const prev = k.projects[i - 1];
-    const next = k.projects[i + 1];
-    return `<div class="wrap k-${k.id}">
-      <p class="crumbs"><a href="#/kits">Kits</a> / <a href="#/kits/${k.id}">${esc(k.code)}</a> / Project ${i + 1}</p>
-      <div class="page-head">
-        <h1>${esc(pr.title)}</h1>
-        <p class="lead">${esc(pr.summary)}</p>
-        <div class="badges"><span class="badge badge-k">${esc(pr.level)}</span><span class="badge">${esc(pr.time)}</span></div>
-      </div>
-      <div class="guide">
-        <div>
-          <h2>Steps</h2>
-          <div class="progress" role="progressbar" aria-label="Steps completed" aria-valuemin="0" aria-valuemax="${pr.steps.length}"><i></i></div>
-          <div id="steps" data-key="${k.id}/${pr.id}">${pr.steps.map((s, n) => `
-            <label class="step"><input type="checkbox" data-step="${n}">
-              <span><b>STEP ${n + 1}</b>${esc(s)}</span></label>`).join('')}</div>
-          ${pr.code ? `<h2>Code</h2><pre><code>${esc(pr.code)}</code></pre>` : ''}
-          ${pr.note ? `<div class="callout" style="margin-top:14px"><strong>Note</strong>${esc(pr.note)}</div>` : ''}
-          <h2>Test it</h2>
-          <div class="callout"><strong>How you know it works</strong>${esc(pr.test)}</div>
-          <h2>What's going on?</h2>
-          <p>${esc(pr.why)}</p>
-          ${pr.extend ? `<h2>Go further</h2><div class="callout"><strong>Challenge</strong>${esc(pr.extend)}</div>` : ''}
-          <div class="pager">
-            ${prev ? `<a class="btn btn-ghost" href="#/kits/${k.id}/${prev.id}">← ${esc(prev.title)}</a>` : '<span></span>'}
-            ${next ? `<a class="btn" href="#/kits/${k.id}/${next.id}">Next: ${esc(next.title)} →</a>` : `<a class="btn" href="#/kits/${k.id}">Back to the ${esc(k.code)} kit</a>`}
-          </div>
-        </div>
-        <aside><div class="card"><h3>You will need</h3>${list(pr.materials)}</div></aside>
-      </div>
-    </div>`;
-  }
-
-  function bindProject() {
-    const box = document.getElementById('steps');
-    if (!box) return;
-    const key = box.dataset.key;
-    const all = store.get('kits-progress', {});
-    const boxes = [...box.querySelectorAll('input')];
-    const bar = main.querySelector('.progress');
-    const paint = () => {
-      const n = boxes.filter((b) => b.checked).length;
-      bar.firstElementChild.style.width = `${(n / boxes.length) * 100}%`;
-      bar.setAttribute('aria-valuenow', n);
-    };
-    boxes.forEach((b) => { b.checked = (all[key] || []).includes(Number(b.dataset.step)); });
-    paint();
-    box.addEventListener('change', () => {
-      const fresh = store.get('kits-progress', {});
-      fresh[key] = boxes.filter((b) => b.checked).map((b) => Number(b.dataset.step));
-      store.set('kits-progress', fresh);
-      paint();
-    });
-  }
-
-  function curriculumPage() {
-    const c = DATA.curriculum;
-    return `<div class="wrap">
-      <p class="crumbs"><a href="#/kits/${c.kit}">ECE kit</a> / Curriculum</p>
-      <div class="page-head"><h1>${esc(c.title)}</h1><p class="lead">${esc(c.summary)}</p></div>
-      <section>${c.lessons.map((l, i) => `
-        <details class="card lesson"${i === 0 ? ' open' : ''}>
-          <summary><span class="n">CLASS ${l.n}</span><h3>${esc(l.title)}
-            ${l.length ? `<small>${esc(l.length)}${l.topic ? ` · ${esc(l.topic)}` : ''}</small>` : ''}</h3></summary>
-          <div class="lesson-body">
-            <h4>Goal</h4><p>${esc(l.goal)}</p>
-            <h4>Big idea</h4><p>${esc(l.bigIdea)}</p>
-            ${l.materials ? `<h4>Materials</h4><p>${esc(l.materials.join(', '))}</p>` : ''}
-            ${l.objectives ? `<h4>Learning objectives</h4><ul>${l.objectives.map((o) => `<li>${esc(o)}</li>`).join('')}</ul>` : ''}
-            <h4>Vocabulary</h4><dl>${l.vocabulary.map(([t, d]) => `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>`).join('')}</dl>
-            ${l.sections.map((s) => `<h4>${esc(s.heading)}</h4>${s.body.map((b) => `<p>${esc(b)}</p>`).join('')}`).join('')}
-          </div>
-        </details>`).join('')}
-        <p style="color:var(--muted)">Ready for more? Continue with the <a href="#/kits/${c.kit}">ECE kit build guides</a>.</p>
-      </section>
-    </div>`;
-  }
-
-  function requestPage(query) {
-    const pre = query.get('kit');
-    const offline = !state.live ? `<div class="notice" role="status" style="margin-bottom:20px">
-      Online requests are not available right now because the club's server is not connected. Browse the kits and guides in the meantime.</div>` : '';
-    return `<div class="wrap">
-      <div class="page-head" style="padding-top:40px"><h1>Request kits</h1>
-        <p class="lead">Teachers and schools: tell us which kit you want and how many students you have. A club officer will follow up by email.</p></div>
-      <section>${offline}
-        <form class="form" id="request-form" novalidate>
-          <label>Your name<input name="name" autocomplete="name" required maxlength="100"><span class="field-err" data-err="name"></span></label>
-          <label>Email<input name="email" type="email" autocomplete="email" required maxlength="200"><span class="field-err" data-err="email"></span></label>
-          <label>School or organization<input name="school" autocomplete="organization" required maxlength="200"><span class="field-err" data-err="school"></span></label>
-          <div class="row">
-            <label>Kit<select name="kitId">${DATA.kits.map((k) => `<option value="${k.id}"${k.id === pre ? ' selected' : ''}>${esc(k.name)}</option>`).join('')}</select><span class="field-err" data-err="kitId"></span></label>
-            <label>Students<input name="quantity" type="number" min="1" max="500" value="30" required><span class="field-err" data-err="quantity"></span></label>
-          </div>
-          <label>Anything else we should know? (optional)<textarea name="notes" rows="4" maxlength="2000"></textarea><span class="field-err" data-err="notes"></span></label>
-          <div><button class="btn" type="submit"${state.live ? '' : ' disabled'}>Send request</button></div>
-          <div id="form-msg" role="status" aria-live="polite"></div>
-        </form>
-      </section>
-    </div>`;
-  }
-
-  function bindRequest() {
-    const form = document.getElementById('request-form');
-    if (!form) return;
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const msg = document.getElementById('form-msg');
-      const btn = form.querySelector('button');
-      form.querySelectorAll('[data-err]').forEach((el) => { el.textContent = ''; });
-      const body = Object.fromEntries(new FormData(form));
-      body.quantity = Number(body.quantity);
-      btn.disabled = true;
-      try {
-        await api('/api/requests', { method: 'POST', body });
-        form.reset();
-        msg.innerHTML = '<div class="notice ok">Request sent. A club officer will email you soon.</div>';
-      } catch (err) {
-        Object.entries(err.fields || {}).forEach(([f, m]) => {
-          const el = form.querySelector(`[data-err="${f}"]`);
-          if (el) el.textContent = m;
-        });
-        msg.innerHTML = `<div class="notice err">${esc(err.status ? err.message : 'Could not reach the server. Check your connection and try again.')}</div>`;
-      } finally { btn.disabled = false; }
-    });
-  }
-
-  function adminPage() {
-    if (!state.live) return `<div class="wrap"><div class="page-head" style="padding-top:40px"><h1>Officer login</h1></div>
-      <section><div class="notice">The club's server is not connected, so there are no requests to show.</div></section></div>`;
-    return `<div class="wrap">
-      <div class="page-head" style="padding-top:40px"><h1>Kit requests</h1><p class="lead">For club officers.</p></div>
-      <section id="admin-body">${session.token ? '<p>Loading…</p>' : `
-        <form class="form" id="admin-login">
-          <label>Admin token<input name="token" type="password" autocomplete="current-password" required></label>
-          <div><button class="btn" type="submit">Sign in</button></div>
-          <div id="admin-msg" role="status" aria-live="polite"></div>
-        </form>`}</section>
-    </div>`;
-  }
-
-  async function bindAdmin() {
-    const body = document.getElementById('admin-body');
-    if (!body) return;
-    const login = document.getElementById('admin-login');
-    if (login) {
-      login.addEventListener('submit', (e) => {
-        e.preventDefault();
-        session.token = login.token.value.trim();
-        render();
-      });
-      return;
-    }
+function bindRequest() {
+  const form = document.getElementById('request-form');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = document.getElementById('form-msg');
+    const btn = form.querySelector('button');
+    form.querySelectorAll('[data-err]').forEach((el) => { el.textContent = ''; });
+    const body = Object.fromEntries(new FormData(form));
+    body.quantity = Number(body.quantity);
+    btn.disabled = true;
     try {
-      const rows = await api('/api/requests', { token: session.token });
-      const statuses = ['new', 'contacted', 'fulfilled', 'declined'];
-      body.innerHTML = `
-        <p style="margin-bottom:14px">${rows.length} request${rows.length === 1 ? '' : 's'} · <a href="#/admin" id="signout">Sign out</a></p>
-        ${rows.length ? `<div class="table-wrap"><table>
-          <thead><tr><th>Date</th><th>School</th><th>Contact</th><th>Kit</th><th>Qty</th><th>Notes</th><th>Status</th></tr></thead>
-          <tbody>${rows.map((r) => `<tr>
-            <td>${esc(r.created_at.slice(0, 10))}</td><td>${esc(r.school)}</td>
-            <td>${esc(r.name)}<br><a href="mailto:${esc(r.email)}">${esc(r.email)}</a></td>
-            <td>${esc(kitById(r.kit_id)?.code || r.kit_id)}</td><td>${r.quantity}</td><td>${esc(r.notes)}</td>
-            <td><select data-id="${r.id}" aria-label="Status for ${esc(r.school)}">${statuses.map((s) => `<option${s === r.status ? ' selected' : ''}>${s}</option>`).join('')}</select></td>
-          </tr>`).join('')}</tbody></table></div>` : '<div class="notice">No requests yet.</div>'}
-        <div id="admin-msg" role="status" aria-live="polite" style="margin-top:12px"></div>`;
-      document.getElementById('signout').addEventListener('click', () => { session.token = ''; render(); });
-      body.addEventListener('change', async (e) => {
-        if (!e.target.matches('select[data-id]')) return;
-        const msg = document.getElementById('admin-msg');
-        try {
-          await api(`/api/requests/${e.target.dataset.id}`, { method: 'PATCH', token: session.token, body: { status: e.target.value } });
-          msg.innerHTML = '<span style="color:var(--ok)">Saved.</span>';
-        } catch (err) { msg.innerHTML = `<span class="field-err">${esc(err.message)}</span>`; }
-      });
+      await api('/api/requests', { method: 'POST', body });
+      form.reset();
+      msg.innerHTML = '<div class="notice ok">Request sent. A club officer will email you soon.</div>';
     } catch (err) {
-      session.token = '';
-      render();
+      Object.entries(err.fields || {}).forEach(([f, m]) => {
+        const el = form.querySelector(`[data-err="${f}"]`);
+        if (el) el.textContent = m;
+      });
+      msg.innerHTML = `<div class="notice err">${esc(err.status ? err.message : 'Could not reach the server. Check your connection and try again.')}</div>`;
+    } finally { btn.disabled = false; }
+  });
+}
+
+function adminPage() {
+  if (!state.live) return `<div class="wrap"><p class="crumbs">Officers</p><div class="page-head"><h1>Officer login.</h1></div>
+    <div class="block"><div class="notice">The club's server is not connected, so there are no requests to show.</div></div></div>`;
+  return `<div class="wrap">
+    <p class="crumbs">Officers</p>
+    <div class="page-head"><h1>Kit requests.</h1><p class="lede">For club officers.</p></div>
+    <div class="block" id="admin-body">${session.token ? '<p>Loading…</p>' : `
+      <form class="form" id="admin-login">
+        <label>Admin token<input name="token" type="password" autocomplete="current-password" required></label>
+        <div><button class="btn" type="submit">Sign in</button></div>
+        <div id="admin-msg" role="status" aria-live="polite"></div>
+      </form>`}</div>
+  </div>`;
+}
+
+async function bindAdmin() {
+  const body = document.getElementById('admin-body');
+  if (!body) return;
+  const login = document.getElementById('admin-login');
+  if (login) {
+    login.addEventListener('submit', (e) => { e.preventDefault(); session.token = login.token.value.trim(); render(); });
+    return;
+  }
+  try {
+    const rows = await api('/api/requests', { token: session.token });
+    const statuses = ['new', 'contacted', 'fulfilled', 'declined'];
+    body.innerHTML = `
+      <p style="margin-bottom:14px" class="muted">${rows.length} request${rows.length === 1 ? '' : 's'} · <a class="link" href="#/admin" id="signout">Sign out</a></p>
+      ${rows.length ? `<div class="table-wrap"><table>
+        <thead><tr><th>Date</th><th>School</th><th>Contact</th><th>Kit</th><th>Qty</th><th>Notes</th><th>Status</th></tr></thead>
+        <tbody>${rows.map((r) => `<tr>
+          <td>${esc(r.created_at.slice(0, 10))}</td><td>${esc(r.school)}</td>
+          <td>${esc(r.name)}<br><a href="mailto:${esc(r.email)}">${esc(r.email)}</a></td>
+          <td>${esc(kitById(r.kit_id)?.code || r.kit_id)}</td><td>${r.quantity}</td><td>${esc(r.notes)}</td>
+          <td><select data-id="${r.id}" aria-label="Status for ${esc(r.school)}">${statuses.map((s) => `<option${s === r.status ? ' selected' : ''}>${s}</option>`).join('')}</select></td>
+        </tr>`).join('')}</tbody></table></div>` : '<div class="notice">No requests yet.</div>'}
+      <div id="admin-msg" role="status" aria-live="polite" style="margin-top:12px"></div>`;
+    document.getElementById('signout').addEventListener('click', () => { session.token = ''; render(); });
+    body.addEventListener('change', async (e) => {
+      if (!e.target.matches('select[data-id]')) return;
       const msg = document.getElementById('admin-msg');
-      if (msg) msg.innerHTML = `<div class="notice err">${esc(err.status ? err.message : 'Could not reach the server.')}</div>`;
-    }
-  }
-
-  const notFound = () => `<div class="wrap"><div class="page-head" style="padding-top:60px"><h1>Page not found</h1>
-    <p class="lead">That page does not exist.</p><p style="margin-top:24px"><a class="btn" href="#/">Go home</a></p></div></div>`;
-
-  // ---------- router ----------
-  function render() {
-    const [pathPart, queryPart = ''] = location.hash.replace(/^#/, '').split('?');
-    const parts = pathPart.split('/').filter(Boolean);
-    const query = new URLSearchParams(queryPart);
-    let html;
-    let title = 'Engineering Kits';
-    let after;
-    if (!parts.length) html = home();
-    else if (parts[0] === 'kits' && parts.length === 1) { html = kitsIndex(); title = 'Kits'; }
-    else if (parts[0] === 'kits') {
-      const k = kitById(parts[1]);
-      const pr = k && parts[2] ? k.projects.find((x) => x.id === parts[2]) : null;
-      if (k && parts.length === 2) { html = kitPage(k); title = k.name; }
-      else if (pr && parts.length === 3) { html = projectPage(k, pr); title = pr.title; after = bindProject; }
-    } else if (parts[0] === 'curriculum' && parts.length === 1) { html = curriculumPage(); title = 'Curriculum'; }
-    else if (parts[0] === 'request' && parts.length === 1) { html = requestPage(query); title = 'Request kits'; after = bindRequest; }
-    else if (parts[0] === 'admin' && parts.length === 1) { html = adminPage(); title = 'Officer login'; after = bindAdmin; }
-    main.innerHTML = html || notFound();
-    document.title = `${html ? title : 'Not found'} – ${DATA.site.club}`;
-    document.querySelectorAll('[data-nav]').forEach((a) => {
-      a.dataset.nav === parts[0] ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current');
+      try {
+        await api(`/api/requests/${e.target.dataset.id}`, { method: 'PATCH', token: session.token, body: { status: e.target.value } });
+        msg.innerHTML = '<span style="color:var(--ok)">Saved.</span>';
+      } catch (err) { msg.innerHTML = `<span class="field-err">${esc(err.message)}</span>`; }
     });
-    after?.();
+  } catch (err) {
+    session.token = '';
+    render();
+    const msg = document.getElementById('admin-msg');
+    if (msg) msg.innerHTML = `<div class="notice err">${esc(err.status ? err.message : 'Could not reach the server.')}</div>`;
   }
+}
 
-  window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); main.focus({ preventScroll: true }); });
-  render();
+const notFound = () => `<div class="wrap"><p class="crumbs">404</p><div class="page-head"><h1>Page not found.</h1>
+  <p class="lede">That page does not exist.</p><div class="hero-ctas"><a class="btn" href="#/">Go home</a></div></div></div>`;
 
-  // Detect the backend; the guides work without it.
-  const status = document.getElementById('api-status');
-  const onFile = location.protocol === 'file:';
-  (onFile && !API ? Promise.reject() : api('/api/health'))
-    .then((h) => { state.live = Boolean(h.ok); state.adminConfigured = h.adminConfigured; })
-    .catch(() => { state.live = false; })
-    .finally(() => {
-      status.textContent = state.live ? 'Server connected' : 'Guides only (server not connected)';
-      status.classList.toggle('live', state.live);
-      const route = location.hash.split('?')[0];
-      if (route === '#/request' || route === '#/admin') render();
-    });
-})();
+// ---------- router ----------
+function render() {
+  cleanup.forEach((fn) => fn());
+  cleanup = [];
+  const [pathPart, queryPart = ''] = location.hash.replace(/^#/, '').split('?');
+  const parts = pathPart.split('/').filter(Boolean);
+  const query = new URLSearchParams(queryPart);
+  let html;
+  let title = 'Engineering Kits';
+  let after;
+  if (!parts.length) { html = home(); after = bindHome; }
+  else if (parts[0] === 'kits' && parts.length === 1) { html = kitsIndex(); title = 'Kits'; }
+  else if (parts[0] === 'kits') {
+    const k = kitById(parts[1]);
+    const pr = k && parts[2] ? k.projects.find((x) => x.id === parts[2]) : null;
+    if (k && parts.length === 2) { html = kitPage(k); title = k.name; }
+    else if (pr && parts.length === 3) { html = projectPage(k, pr); title = pr.title; after = () => bindProject(k, pr); }
+  } else if (parts[0] === 'curriculum' && parts.length === 1) { html = curriculumPage(); title = 'Curriculum'; }
+  else if (parts[0] === 'request' && parts.length === 1) { html = requestPage(query); title = 'Request kits'; after = bindRequest; }
+  else if (parts[0] === 'admin' && parts.length === 1) { html = adminPage(); title = 'Officer login'; after = bindAdmin; }
+  main.innerHTML = html || notFound();
+  document.title = `${html ? title : 'Not found'} · ${DATA.site.club}`;
+  document.querySelectorAll('[data-nav]').forEach((a) => {
+    a.dataset.nav === parts[0] ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current');
+  });
+  const io = new IntersectionObserver((entries) => entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: 0.12 });
+  main.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+  cleanup.push(() => io.disconnect());
+  after?.();
+}
+
+window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); main.focus({ preventScroll: true }); });
+render();
+
+// Detect the backend; the guides work without it.
+(location.protocol === 'file:' && !API ? Promise.reject() : api('/api/health'))
+  .then((h) => { state.live = Boolean(h.ok); })
+  .catch(() => { state.live = false; })
+  .finally(() => {
+    document.getElementById('api-status').textContent = state.live ? 'Server connected' : 'Guides only · request server not connected';
+    document.getElementById('api-dot').classList.toggle('live', state.live);
+    const route = location.hash.split('?')[0];
+    if (route === '#/request' || route === '#/admin') render();
+  });
