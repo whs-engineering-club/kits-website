@@ -153,8 +153,9 @@ void loop() {
         'Read an ultrasonic distance sensor and swing a servo arm when something gets close — an automatic gate.',
         ['Microcontroller board and USB cable', 'Laptop / Chromebook', 'Ultrasonic sensor (HC-SR04 type)', 'SG90 servo', 'Breadboard', 'Jumper wires'],
         [
-          'Servo: brown wire → GND, red wire → 5V, orange wire → pin 9.',
-          'Ultrasonic sensor: VCC → 5V, GND → GND, TRIG → pin 7, ECHO → pin 6.',
+          'Run a wire from the board\'s 5V pin to an empty breadboard column, and another from GND to a second empty column. The servo and sensor will share these two columns.',
+          'Servo: red wire → the 5V column, brown wire → the GND column, orange wire → pin 9.',
+          'Ultrasonic sensor: push its four pins into the breadboard. VCC → the 5V column, GND → the GND column, TRIG → pin 7, ECHO → pin 6.',
           'Tape a craft stick or paper flag to the servo horn so the movement is easy to see.',
           'Type in the sketch below and upload it.',
           'Move your hand toward the sensor. Inside 15 cm the arm should swing up; move away and it drops.',
