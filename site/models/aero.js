@@ -417,8 +417,8 @@ export default {
     tapeMeasure(b, F + 1, F + 31, 9.5);
     cone(b, F + 19, 7.5, BLUE); cone(b, F + 31, 7.5, GREEN);
     b.label('50 turns', [F + 19, 2.6, 7.5]);
-    b.label('100 turns: twice as far?', [F + 31, 2.6, 7.5]);
-    b.label('Record the distance each time', [CX, 9, 0]);
+    b.label('100 turns', [F + 31, 2.6, 7.5]);
+    b.label('Record distance. Twice as far?', [F + 22, 10, 0]);
 
     b.effect((s, t) => {
       let dx = 0, spin = 0;
