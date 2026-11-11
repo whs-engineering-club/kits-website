@@ -17,7 +17,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const ACCENT = 0xf7871f;
+const ACCENT = 0xf0703a;
 const V = (p) => (p.isVector3 ? p.clone() : new THREE.Vector3(p[0], p[1], p[2]));
 
 function mat(color, o = {}) {
@@ -350,7 +350,7 @@ export function mountViewer(el, build, opts = {}) {
     return null;
   }
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const BG = 0x1a1714;
+  const BG = 0x191918;
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -370,7 +370,7 @@ export function mountViewer(el, build, opts = {}) {
   const center = box.getCenter(new THREE.Vector3());
   const radius = Math.max(box.getSize(new THREE.Vector3()).length() / 2, 1);
 
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(radius * 6, 64), new THREE.MeshStandardMaterial({ color: 0x241f1a, roughness: 1 }));
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(radius * 6, 64), new THREE.MeshStandardMaterial({ color: 0x232321, roughness: 1 }));
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = Math.min(0, box.min.y) - 0.02;
   ground.receiveShadow = true;
