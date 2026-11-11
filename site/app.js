@@ -1,7 +1,5 @@
 const DATA = window.KITS_DATA;
-const API = (window.KITS_CONFIG?.API_BASE || '').replace(/\/$/, '');
 const main = document.getElementById('main');
-const state = { live: false };
 let cleanup = []; // disposers for the current page (3D viewers, timers, listeners)
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -9,22 +7,6 @@ const store = {
   get(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } },
   set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ } },
 };
-const session = {
-  get token() { try { return sessionStorage.getItem('kits-admin') || ''; } catch { return ''; } },
-  set token(v) { try { v ? sessionStorage.setItem('kits-admin', v) : sessionStorage.removeItem('kits-admin'); } catch { /* ignore */ } },
-};
-
-async function api(path, { method = 'GET', body, token } = {}) {
-  const res = await fetch(API + path, {
-    method,
-    headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw Object.assign(new Error(json.error || `Request failed (${res.status})`), { status: res.status, fields: json.fields });
-  return json;
-}
-
 const kitById = (id) => DATA.kits.find((k) => k.id === id);
 const list = (items) => `<ul class="list">${items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>`;
 const totalProjects = DATA.kits.reduce((n, k) => n + k.projects.length, 0);
@@ -125,7 +107,7 @@ function home() {
       <p class="lede">Low-cost kits for elementary and middle school classrooms. Every project comes with a 3D model that shows exactly what each step looks like, so any teacher can run it.</p>
       <div class="hero-ctas">
         <a class="btn" href="#/kits">Pick a kit <span aria-hidden="true">→</span></a>
-        <a class="link" href="#/request">Request kits for your school <span aria-hidden="true">→</span></a>
+        <a class="link" href="#/curriculum">Arduino lesson plans <span aria-hidden="true">→</span></a>
       </div>
     </div>
     <div class="wrap">
@@ -207,11 +189,11 @@ function home() {
 
   <section class="section cta">
     <div class="wrap cta-inner">
-      <h2>Bring a kit to your classroom.</h2>
-      <p class="sub">Start with any guide today, or ask the club for kits for your students.</p>
+      <h2>Start with the first build.</h2>
+      <p class="sub">Pick a kit, open the first guide, and build along with the 3D model.</p>
       <div class="hero-ctas center">
         <a class="btn" href="#/kits">Browse the kits <span aria-hidden="true">→</span></a>
-        <a class="link" href="#/request">Request kits <span aria-hidden="true">→</span></a>
+        <a class="link" href="#/curriculum">Arduino lesson plans <span aria-hidden="true">→</span></a>
       </div>
     </div>
   </section>`;
@@ -296,7 +278,6 @@ function kitPage(k) {
       <div class="tags">${k.concepts.map((c) => `<span class="badge">${esc(c)}</span>`).join('')}</div>
     </div>
     ${lessons}${sourcing}
-    <div class="block"><a class="btn" href="#/request?kit=${k.id}">Request this kit <span aria-hidden="true">→</span></a></div>
   </div>`;
 }
 
@@ -368,109 +349,6 @@ function curriculumPage() {
   </div>`;
 }
 
-function requestPage(query) {
-  const pre = query.get('kit');
-  const offline = !state.live ? `<div class="notice" role="status" style="margin-bottom:20px">
-    Online requests are not available right now because the club's server is not connected. The kits and guides all work in the meantime.</div>` : '';
-  return `<div class="wrap">
-    <p class="crumbs">Request</p>
-    <div class="page-head"><h1>Request kits.</h1>
-      <p class="lede">Teachers and schools: tell us which kit you want and how many students you have. A club officer will follow up by email.</p></div>
-    <div class="block">${offline}
-      <form class="form" id="request-form" novalidate>
-        <label>Your name<input name="name" autocomplete="name" required maxlength="100"><span class="field-err" data-err="name"></span></label>
-        <label>Email<input name="email" type="email" autocomplete="email" required maxlength="200"><span class="field-err" data-err="email"></span></label>
-        <label>School or organization<input name="school" autocomplete="organization" required maxlength="200"><span class="field-err" data-err="school"></span></label>
-        <div class="row">
-          <label>Kit<select name="kitId">${DATA.kits.map((k) => `<option value="${k.id}"${k.id === pre ? ' selected' : ''}>${esc(k.name)}</option>`).join('')}</select><span class="field-err" data-err="kitId"></span></label>
-          <label>Students<input name="quantity" type="number" min="1" max="500" value="30" required><span class="field-err" data-err="quantity"></span></label>
-        </div>
-        <label>Anything else we should know? (optional)<textarea name="notes" rows="4" maxlength="2000"></textarea><span class="field-err" data-err="notes"></span></label>
-        <div><button class="btn" type="submit"${state.live ? '' : ' disabled'}>Send request</button></div>
-        <div id="form-msg" role="status" aria-live="polite"></div>
-      </form>
-    </div>
-  </div>`;
-}
-
-function bindRequest() {
-  const form = document.getElementById('request-form');
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const msg = document.getElementById('form-msg');
-    const btn = form.querySelector('button');
-    form.querySelectorAll('[data-err]').forEach((el) => { el.textContent = ''; });
-    const body = Object.fromEntries(new FormData(form));
-    body.quantity = Number(body.quantity);
-    btn.disabled = true;
-    try {
-      await api('/api/requests', { method: 'POST', body });
-      form.reset();
-      msg.innerHTML = '<div class="notice ok">Request sent. A club officer will email you soon.</div>';
-    } catch (err) {
-      Object.entries(err.fields || {}).forEach(([f, m]) => {
-        const el = form.querySelector(`[data-err="${f}"]`);
-        if (el) el.textContent = m;
-      });
-      msg.innerHTML = `<div class="notice err">${esc(err.status ? err.message : 'Could not reach the server. Check your connection and try again.')}</div>`;
-    } finally { btn.disabled = false; }
-  });
-}
-
-function adminPage() {
-  if (!state.live) return `<div class="wrap"><p class="crumbs">Officers</p><div class="page-head"><h1>Officer login.</h1></div>
-    <div class="block"><div class="notice">The club's server is not connected, so there are no requests to show.</div></div></div>`;
-  return `<div class="wrap">
-    <p class="crumbs">Officers</p>
-    <div class="page-head"><h1>Kit requests.</h1><p class="lede">For club officers.</p></div>
-    <div class="block" id="admin-body">${session.token ? '<p>Loading…</p>' : `
-      <form class="form" id="admin-login">
-        <label>Admin token<input name="token" type="password" autocomplete="current-password" required></label>
-        <div><button class="btn" type="submit">Sign in</button></div>
-        <div id="admin-msg" role="status" aria-live="polite"></div>
-      </form>`}</div>
-  </div>`;
-}
-
-async function bindAdmin() {
-  const body = document.getElementById('admin-body');
-  if (!body) return;
-  const login = document.getElementById('admin-login');
-  if (login) {
-    login.addEventListener('submit', (e) => { e.preventDefault(); session.token = login.token.value.trim(); render(); });
-    return;
-  }
-  try {
-    const rows = await api('/api/requests', { token: session.token });
-    const statuses = ['new', 'contacted', 'fulfilled', 'declined'];
-    body.innerHTML = `
-      <p style="margin-bottom:14px" class="muted">${rows.length} request${rows.length === 1 ? '' : 's'} · <a class="link" href="#/admin" id="signout">Sign out</a></p>
-      ${rows.length ? `<div class="table-wrap"><table>
-        <thead><tr><th>Date</th><th>School</th><th>Contact</th><th>Kit</th><th>Qty</th><th>Notes</th><th>Status</th></tr></thead>
-        <tbody>${rows.map((r) => `<tr>
-          <td>${esc(r.created_at.slice(0, 10))}</td><td>${esc(r.school)}</td>
-          <td>${esc(r.name)}<br><a href="mailto:${esc(r.email)}">${esc(r.email)}</a></td>
-          <td>${esc(kitById(r.kit_id)?.code || r.kit_id)}</td><td>${r.quantity}</td><td>${esc(r.notes)}</td>
-          <td><select data-id="${r.id}" aria-label="Status for ${esc(r.school)}">${statuses.map((s) => `<option${s === r.status ? ' selected' : ''}>${s}</option>`).join('')}</select></td>
-        </tr>`).join('')}</tbody></table></div>` : '<div class="notice">No requests yet.</div>'}
-      <div id="admin-msg" role="status" aria-live="polite" style="margin-top:12px"></div>`;
-    document.getElementById('signout').addEventListener('click', () => { session.token = ''; render(); });
-    body.addEventListener('change', async (e) => {
-      if (!e.target.matches('select[data-id]')) return;
-      const msg = document.getElementById('admin-msg');
-      try {
-        await api(`/api/requests/${e.target.dataset.id}`, { method: 'PATCH', token: session.token, body: { status: e.target.value } });
-        msg.innerHTML = '<span style="color:var(--ok)">Saved.</span>';
-      } catch (err) { msg.innerHTML = `<span class="field-err">${esc(err.message)}</span>`; }
-    });
-  } catch (err) {
-    session.token = '';
-    render();
-    const msg = document.getElementById('admin-msg');
-    if (msg) msg.innerHTML = `<div class="notice err">${esc(err.status ? err.message : 'Could not reach the server.')}</div>`;
-  }
-}
-
 const notFound = () => `<div class="wrap"><p class="crumbs">404</p><div class="page-head"><h1>Page not found.</h1>
   <p class="lede">That page does not exist.</p><div class="hero-ctas"><a class="btn" href="#/">Go home</a></div></div></div>`;
 
@@ -478,9 +356,8 @@ const notFound = () => `<div class="wrap"><p class="crumbs">404</p><div class="p
 function render() {
   cleanup.forEach((fn) => fn());
   cleanup = [];
-  const [pathPart, queryPart = ''] = location.hash.replace(/^#/, '').split('?');
+  const [pathPart] = location.hash.replace(/^#/, '').split('?');
   const parts = pathPart.split('/').filter(Boolean);
-  const query = new URLSearchParams(queryPart);
   let html;
   let title = 'Engineering Kits';
   let after;
@@ -492,8 +369,6 @@ function render() {
     if (k && parts.length === 2) { html = kitPage(k); title = k.name; }
     else if (pr && parts.length === 3) { html = projectPage(k, pr); title = pr.title; after = () => bindProject(k, pr); }
   } else if (parts[0] === 'curriculum' && parts.length === 1) { html = curriculumPage(); title = 'Curriculum'; }
-  else if (parts[0] === 'request' && parts.length === 1) { html = requestPage(query); title = 'Request kits'; after = bindRequest; }
-  else if (parts[0] === 'admin' && parts.length === 1) { html = adminPage(); title = 'Officer login'; after = bindAdmin; }
   main.innerHTML = html || notFound();
   document.title = `${html ? title : 'Not found'} · ${DATA.site.club}`;
   document.querySelectorAll('[data-nav]').forEach((a) => {
@@ -507,14 +382,3 @@ function render() {
 
 window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); main.focus({ preventScroll: true }); });
 render();
-
-// Detect the backend; the guides work without it.
-(location.protocol === 'file:' && !API ? Promise.reject() : api('/api/health'))
-  .then((h) => { state.live = Boolean(h.ok); })
-  .catch(() => { state.live = false; })
-  .finally(() => {
-    document.getElementById('api-status').textContent = state.live ? 'Server connected' : 'Guides only · request server not connected';
-    document.getElementById('api-dot').classList.toggle('live', state.live);
-    const route = location.hash.split('?')[0];
-    if (route === '#/request' || route === '#/admin') render();
-  });
