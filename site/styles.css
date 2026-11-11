@@ -321,9 +321,6 @@ body {
 .foot { margin-top: 160px; background: var(--surface); }
 .foot-in { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; align-items: center; padding: 32px 32px 104px; color: var(--ink-3); font-size: 14px; }
 .foot-in a { text-decoration: underline; }
-.dots { display: flex; gap: 20px; flex-wrap: wrap; }
-.dots a { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; color: var(--ink); font-weight: 600; }
-.dots i { width: 12px; height: 12px; border-radius: 50%; background: var(--ki); }
 
 /* ---------- page transitions (View Transitions API; only when the browser supports it) ---------- */
 ::view-transition-group(site-top) { animation: none; }
