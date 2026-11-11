@@ -40,8 +40,7 @@ export const COPY = {
   mission: "Engineering shouldn't depend on a school's budget.",
   missionMore: 'We design low-cost kits for Title I classrooms and write the lessons that go with them, so any teacher can run a real engineering unit.',
   kitsPara: 'Every student gets a bag of everyday parts: craft sticks, LEDs, straws, coffee filters. A shared classroom toolbox adds equipment like microcontrollers and digital scales for the bonus lessons.',
-  clubPara: 'The WHS Engineering Club is a high school club. Members pick the parts, find the cheapest way to buy them, and write every plan and build guide on this site.',
-  costNote: 'The electrical student kit costs about $3–$5 per student. Prices for the other kits are still being worked out.',
+  clubPara: 'The WHS Engineering Club is a high school club. Members choose the parts and write every plan and build guide on this site.',
   how: [
     ['Every student gets a kit', 'A bag of low-cost parts for each student or pair. Every core lesson runs on that bag alone.'],
     ['One session a week', 'Six or seven sessions of 60–90 minutes, ending with a project students design themselves.'],
