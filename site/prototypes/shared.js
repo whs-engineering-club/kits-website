@@ -11,12 +11,6 @@ body { --sans: "Space Grotesk", system-ui, sans-serif; --display: "Space Grotesk
 .big-copy, .kb-txt h3, .how h3, .numbers b, .brand, .btn, .seg button { letter-spacing: -0.03em; }
 `;
 
-// Things that scroll into view. Grid children get --i (their index among siblings) for stagger.
-export const TARGETS = [
-  '.big-copy', '.numbers > div', '.two > p', '.fine', '.sec > .h2', '.kblock', '.how > div', '.faq details',
-  '.bcard', '.bonus > div', '.buy > div', '.weeks details', '.concepts', '.lesson', '.kit-band .band-in > *',
-].join(', ');
-
 export const reduced = (win) => win.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // Run `bind(main)` now and again every time the router swaps the page content.

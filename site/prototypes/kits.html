@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Scroll animation prototypes</title>
+<title>Kit section prototypes</title>
 <style>
 html, body { margin: 0; height: 100%; background: #FFFDF9; overflow: hidden; }
 #stage { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
@@ -79,22 +79,23 @@ html, body { margin: 0; height: 100%; background: #FFFDF9; overflow: hidden; }
 
 <nav class="proto-picker" aria-label="Prototype variants">
   <span class="proto-picker-highlight" aria-hidden="true"></span>
-  <button class="proto-picker-item" data-active aria-current="true">Rise</button>
-  <button class="proto-picker-item">Scrub</button>
-  <button class="proto-picker-item">Curtain</button>
-  <button class="proto-picker-item">Depth</button>
+  <button class="proto-picker-item" data-active aria-current="true">Wheel</button>
+  <button class="proto-picker-item">Stack</button>
+  <button class="proto-picker-item">Track</button>
+  <button class="proto-picker-item">Spotlight</button>
   <span class="proto-picker-divider" aria-hidden="true"></span>
   <button class="proto-picker-item proto-picker-replay" aria-label="Replay animation (R)">↻</button>
 </nav>
 
 <script type="module">
 import { FONT_LINK, BASE_CSS } from './shared.js';
-import * as rise from './v1-rise.js';
-import * as scrub from './v2-scrub.js';
-import * as curtain from './v3-curtain.js';
-import * as depth from './v4-depth.js';
+import * as combined from './combined.js';
+import * as wheel from './k1-wheel.js';
+import * as stack from './k2-stack.js';
+import * as track from './k3-track.js';
+import * as spotlight from './k4-spotlight.js';
 
-const mods = [rise, scrub, curtain, depth];
+const mods = [wheel, stack, track, spotlight];
 const stage = document.getElementById('stage');
 const picker = document.querySelector('.proto-picker');
 const highlight = picker.querySelector('.proto-picker-highlight');
@@ -120,9 +121,9 @@ function mount(i) {
     for (let n = 0; n < 120 && !doc.querySelector('#main .stage-hero'); n++) await new Promise((r) => setTimeout(r, 50));
     if (mine !== token) return;
     const link = doc.createElement('link'); link.rel = 'stylesheet'; link.href = FONT_LINK; doc.head.append(link);
-    const style = doc.createElement('style'); style.id = 'pv-style'; style.textContent = BASE_CSS + mods[i].css; doc.head.append(style);
-    const stop = mods[i].setup(win, doc);
-    teardown = () => { stop?.(); };
+    const style = doc.createElement('style'); style.id = 'pv-style'; style.textContent = BASE_CSS + combined.css + mods[i].css; doc.head.append(style);
+    const stops = [combined.setup(win, doc), mods[i].setup(win, doc)];
+    teardown = () => { stops.forEach((s) => s?.()); };
     // keys keep working while the page has focus
     doc.addEventListener('keydown', onKey);
   };
