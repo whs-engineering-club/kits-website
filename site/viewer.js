@@ -1,6 +1,7 @@
 // 3D step viewer. A model file describes a build as parts tagged with the step
 // that adds them; the viewer shows everything up to the current step and
-// highlights what is new.
+// highlights what is new. Scenes are lit like a product shot on a coloured tile
+// (pass opts.theme to match the page), and snapshot() renders thumbnails.
 //
 // Model authoring API (see models/ece.js for worked examples):
 //   export default { 'project-id': (b) => { ... } }
@@ -17,7 +18,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const ACCENT = 0xf0703a;
 const V = (p) => (p.isVector3 ? p.clone() : new THREE.Vector3(p[0], p[1], p[2]));
 
 function mat(color, o = {}) {
@@ -341,16 +341,59 @@ export class Builder {
 
 // ---------------------------------------------------------------------------
 
+// Pages pass a theme so renders sit seamlessly on their tiles (bg = the tile colour).
+const DEFAULT_THEME = { bg: 0xf1f1ee, shadow: 0.16, sky: 0xffffff, ground: 0xd8cfc2, light: 1.9 };
+const ACCENT = 0xd9480f;  // new-part highlight
+const VIEW = new THREE.Vector3(0.55, 0.62, 1).normalize();
+
+// Build a lit scene for a model. Shared by the live viewer and snapshots.
+function makeStage(build, theme = {}) {
+  const t = { ...DEFAULT_THEME, ...theme };
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(t.bg);
+  const b = new Builder();
+  build(b);
+  scene.add(b.root);
+
+  const box = new THREE.Box3().setFromObject(b.root);
+  const center = box.getCenter(new THREE.Vector3());
+  const radius = Math.max(box.getSize(new THREE.Vector3()).length() / 2, 1);
+
+  // Shadow-only floor: objects sit on the tile colour like a product shot.
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(radius * 8, 64), new THREE.ShadowMaterial({ opacity: t.shadow }));
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = Math.min(0, box.min.y) - 0.02;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  scene.add(new THREE.HemisphereLight(t.sky, t.ground, t.light));
+  const sun = new THREE.DirectionalLight(0xffffff, 2.1);
+  sun.position.copy(center).add(new THREE.Vector3(radius * 0.7, radius * 2.4, radius * 1.1));
+  sun.target.position.copy(center);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -radius * 1.5, right: radius * 1.5, top: radius * 1.5, bottom: -radius * 1.5, near: 0.1, far: radius * 6 });
+  sun.shadow.bias = -0.0005;
+  sun.shadow.radius = 4;
+  scene.add(sun, sun.target);
+
+  const maxStep = Math.max(...b.parts.map((p) => p.userData.from), ...b.labels.map((l) => l.step), 0);
+  const show = (n) => b.parts.forEach((p) => { p.visible = n >= p.userData.from && n <= p.userData.to; });
+  const dispose = () => scene.traverse((o) => { if (o.isMesh) { o.geometry.dispose(); [].concat(o.material).forEach((m) => m.dispose()); } });
+  return { scene, b, center, radius, maxStep, show, dispose };
+}
+
+const fitFor = (camera) => {
+  const vf = THREE.MathUtils.degToRad(camera.fov) / 2;
+  const hf = Math.atan(Math.tan(vf) * camera.aspect);
+  return (r) => (r / Math.sin(Math.min(vf, hf))) * 0.8;
+};
+
+// ---------------------------------------------------------------- live viewer
 export function mountViewer(el, build, opts = {}) {
   let renderer;
-  try {
-    renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: Boolean(opts.capture) });
-  } catch {
-    el.innerHTML = '<p class="viewer-fallback">3D view is not available in this browser. Follow the written steps instead.</p>';
-    return null;
-  }
+  try { renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: Boolean(opts.capture) }); } catch { return null; }
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const BG = 0x191918;
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -360,45 +403,20 @@ export function mountViewer(el, build, opts = {}) {
   labelLayer.className = 'viewer-labels';
   el.appendChild(labelLayer);
 
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(BG);
-  const b = new Builder();
-  build(b);
-  scene.add(b.root);
-
-  const box = new THREE.Box3().setFromObject(b.root);
-  const center = box.getCenter(new THREE.Vector3());
-  const radius = Math.max(box.getSize(new THREE.Vector3()).length() / 2, 1);
-
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(radius * 6, 64), new THREE.MeshStandardMaterial({ color: 0x232321, roughness: 1 }));
-  ground.rotation.x = -Math.PI / 2;
-  ground.position.y = Math.min(0, box.min.y) - 0.02;
-  ground.receiveShadow = true;
-  scene.add(ground);
-  scene.fog = new THREE.Fog(BG, radius * 4, radius * 11);
-
-  scene.add(new THREE.HemisphereLight(0xfff3e4, 0x3a2a1c, 1.5));
-  const sun = new THREE.DirectionalLight(0xffffff, 2.4);
-  sun.position.copy(center).add(new THREE.Vector3(radius * 0.8, radius * 2.2, radius * 1.2));
-  sun.target.position.copy(center);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  Object.assign(sun.shadow.camera, { left: -radius * 1.4, right: radius * 1.4, top: radius * 1.4, bottom: -radius * 1.4, near: 0.1, far: radius * 6 });
-  sun.shadow.bias = -0.0005;
-  scene.add(sun, sun.target);
-
+  const st = makeStage(build, opts.theme);
+  const { scene, b, center, radius } = st;
   const camera = new THREE.PerspectiveCamera(35, 1, 0.1, radius * 40);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.target.copy(center);
   controls.enableDamping = true;
   controls.enablePan = false;
   controls.maxPolarAngle = Math.PI / 2 - 0.05;
-  controls.autoRotate = !reduced && opts.autoRotate !== false;
-  controls.autoRotateSpeed = 0.7;
-  renderer.domElement.addEventListener('pointerdown', () => { controls.autoRotate = false; goal.until = 0; });
+  controls.autoRotate = !reduced && Boolean(opts.autoRotate);
+  controls.autoRotateSpeed = 0.6;
+  const stopAuto = () => { controls.autoRotate = false; goal.until = 0; };
+  renderer.domElement.addEventListener('pointerdown', stopAuto);
   renderer.domElement.addEventListener('wheel', () => { controls.autoRotate = false; }, { once: true, passive: true });
 
-  const viewDir = new THREE.Vector3(...(opts.view ?? [0.55, 0.62, 1])).normalize();
   let placed = false;
   let fit = (r) => r * 3;
   const goal = { target: center.clone(), dist: 0, until: 0 };
@@ -407,13 +425,11 @@ export function mountViewer(el, build, opts = {}) {
     if (!w || !h) return;
     renderer.setSize(w, h);
     camera.aspect = w / h;
-    const vf = THREE.MathUtils.degToRad(camera.fov) / 2;
-    const hf = Math.atan(Math.tan(vf) * camera.aspect);
-    fit = (r) => (r / Math.sin(Math.min(vf, hf))) * 0.8;
+    fit = fitFor(camera);
     const dist = fit(radius);
     controls.minDistance = dist * 0.12;
     controls.maxDistance = dist * 2;
-    if (!placed) { camera.position.copy(center).addScaledVector(viewDir, dist); placed = true; }
+    if (!placed) { camera.position.copy(center).addScaledVector(VIEW, dist); placed = true; }
     camera.updateProjectionMatrix();
   }
   const ro = new ResizeObserver(resize);
@@ -429,22 +445,27 @@ export function mountViewer(el, build, opts = {}) {
   });
 
   const tmp = new THREE.Vector3();
-  const maxStep = Math.max(...b.parts.map((p) => p.userData.from), ...b.labels.map((l) => l.step), 0);
   let step = 0;
   let stepAt = 0;
   const meshesOf = (part) => { const out = []; part.traverse((m) => { if (m.isMesh) out.push(m); }); return out; };
   const highlightable = b.parts.map((p) => meshesOf(p).filter((m) => m.material !== p.userData.keepEmissive));
 
+  function applyGoal(k) {
+    controls.target.lerp(goal.target, k);
+    const off = camera.position.clone().sub(controls.target);
+    off.setLength(off.length() + (goal.dist - off.length()) * k);
+    camera.position.copy(controls.target).add(off);
+  }
   function setStep(n, animate = true) {
     step = n;
     stepAt = animate && !reduced ? performance.now() : -1e9;
-    b.parts.forEach((p) => { p.visible = n >= p.userData.from && n <= p.userData.to; });
+    st.show(n);
     labelEls.forEach((d, i) => { d.hidden = b.labels[i].step !== n; });
-    // Aim the camera at what this step adds, without zooming in too far.
+    // Aim the camera at what this step adds.
     const fb = new THREE.Box3();
     b.parts.forEach((p) => { if (p.userData.from === n && n > 0) fb.expandByObject(p); });
     b.labels.forEach((l) => { if (l.step === n) fb.expandByPoint(l.pos); });
-    if (fb.isEmpty()) { goal.target.copy(center); goal.dist = fit(radius); }
+    if (fb.isEmpty() || opts.overview) { goal.target.copy(center); goal.dist = fit(radius); }
     else {
       const fr = Math.max(fb.getSize(tmp).length() * 0.9, radius * 0.55);
       goal.target.copy(center).lerp(fb.getCenter(tmp), Math.min(0.85, 1 - fr / radius + 0.25));
@@ -453,23 +474,17 @@ export function mountViewer(el, build, opts = {}) {
     goal.until = performance.now() + 1100;
     if (!animate || reduced) { applyGoal(1); goal.until = 0; }
   }
-  function applyGoal(k) {
-    controls.target.lerp(goal.target, k);
-    const off = camera.position.clone().sub(controls.target);
-    off.setLength(off.length() + (goal.dist - off.length()) * k);
-    camera.position.copy(controls.target).add(off);
-  }
 
   let raf = 0, running = false, visible = true;
   function frame(now) {
     raf = requestAnimationFrame(frame);
     const t = now / 1000;
     const k = Math.min(1, (now - stepAt) / 450);
-    const drop = (1 - (1 - (1 - k) ** 3)) * radius * 0.25;
-    const pulse = 0.14 + 0.08 * Math.sin(t * 4);
+    const drop = (1 - k) ** 3 * radius * 0.25;   // new parts settle into place (ease-out)
+    const pulse = 0.16 + 0.08 * Math.sin(t * 4);
     if (now < goal.until) applyGoal(0.09);
     b.parts.forEach((p, i) => {
-      const fresh = p.userData.from === step && step > 0;
+      const fresh = p.userData.from === step && step > 0 && !opts.overview;
       p.position.y = p.userData.baseY + (fresh ? drop : 0);
       highlightable[i].forEach((m) => {
         m.material.emissive.setHex(fresh ? ACCENT : 0x000000);
@@ -496,11 +511,11 @@ export function mountViewer(el, build, opts = {}) {
   io.observe(el);
   document.addEventListener('visibilitychange', sync);
 
-  setStep(opts.step ?? 1, false);
+  setStep(opts.step === 'last' ? st.maxStep : (opts.step ?? 1), false);
   sync();
 
   return {
-    maxStep,
+    maxStep: st.maxStep,
     setStep,
     get step() { return step; },
     dispose() {
@@ -508,9 +523,56 @@ export function mountViewer(el, build, opts = {}) {
       io.disconnect(); ro.disconnect();
       document.removeEventListener('visibilitychange', sync);
       controls.dispose();
-      scene.traverse((o) => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
+      st.dispose();
       renderer.dispose();
+      renderer.forceContextLoss(); // free the WebGL context now, not at GC; browsers cap live contexts
       el.textContent = '';
     },
   };
+}
+
+// ---------------------------------------------------------------- snapshots
+// One shared offscreen renderer draws thumbnails one per frame and caches them,
+// so a page of 6 builds costs one WebGL context instead of six.
+let shared = null;
+const cache = new Map();
+const queue = [];
+let busy = false;
+
+function renderOnce({ build, step, w, h, theme }) {
+  if (!shared) {
+    shared = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    shared.shadowMap.enabled = true;
+    shared.shadowMap.type = THREE.PCFSoftShadowMap;
+    shared.setPixelRatio(1);
+  }
+  shared.setSize(w, h, false);
+  const st = makeStage(build, theme);
+  const n = step === 'last' ? st.maxStep : step;
+  st.show(n);
+  st.b.effects.forEach((fn) => fn(n, 0.4));
+  const camera = new THREE.PerspectiveCamera(35, w / h, 0.1, st.radius * 40);
+  camera.position.copy(st.center).addScaledVector(VIEW, fitFor(camera)(st.radius) * 0.8);
+  camera.lookAt(st.center);
+  shared.render(st.scene, camera);
+  const url = shared.domElement.toDataURL('image/jpeg', 0.9);
+  st.dispose();
+  return url;
+}
+function pump() {
+  if (busy || !queue.length) return;
+  busy = true;
+  requestAnimationFrame(() => {
+    const job = queue.shift();
+    let url = null;
+    try { url = renderOnce(job); } catch { /* WebGL unavailable: tile keeps its plain background */ }
+    job.resolve(url);
+    busy = false;
+    pump();
+  });
+}
+export function snapshot(key, build, { step = 'last', w = 960, h = 720, theme } = {}) {
+  const k = `${key}@${theme?.bg ?? DEFAULT_THEME.bg}`;
+  if (!cache.has(k)) cache.set(k, new Promise((resolve) => { queue.push({ build, step, w, h, theme, resolve }); pump(); }));
+  return cache.get(k);
 }

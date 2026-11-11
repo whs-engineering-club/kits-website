@@ -2,7 +2,11 @@
 // Kit contents, concepts, project lists, the Arduino mini-unit and the parts
 // links come from the club's planning spreadsheet. The step-by-step build
 // guides were written to go with those project lists.
+// Lesson plans live in plans.mjs and step explanations in step-details.mjs; both are
+// merged in at the bottom of this file.
 // After editing, run `npm run build` to regenerate site/data.js.
+import { plans, planInfo } from './plans.mjs';
+import { stepDetails } from './step-details.mjs';
 
 const p = (id, title, time, level, summary, materials, steps, test, why, extra = {}) => ({
   id, title, time, level, summary, materials, steps, test, why, ...extra,
@@ -13,7 +17,7 @@ export const kits = [
     id: 'ece',
     code: 'ECE',
     name: 'Electrical & Computer Engineering Kit',
-    tagline: 'Circuits, sensors and code — from a single LED to a working alarm.',
+    tagline: 'Circuits, sensors and code, from a single LED to a working alarm.',
     cost: 'Student kit: around $3–$5',
     studentKit: [
       'Mini breadboard',
@@ -225,7 +229,7 @@ void loop() {
     id: 'meche',
     code: 'MECHE',
     name: 'Mechanical Engineering Kit',
-    tagline: 'Bridges, towers and cranes built from craft sticks — then loaded until they fail.',
+    tagline: 'Bridges, towers and cranes built from craft sticks, then loaded until they fail.',
     studentKit: [
       'Popsicle sticks or craft sticks', 'Skewers', 'Straws', 'Rubber bands', 'Paper clips', 'String',
       'Cardboard strips', 'Index cards', 'Small washers or pennies as weights', 'Binder clips',
@@ -317,7 +321,7 @@ void loop() {
     id: 'aero',
     code: 'AERO',
     name: 'Aerospace Engineering Kit',
-    tagline: 'Gliders, balloon rockets and parachutes — fly it, measure it, improve it.',
+    tagline: 'Gliders, balloon rockets and parachutes. Fly it, measure it, improve it.',
     studentKit: [
       'Balloons', 'Straws', 'String', 'Paper', 'Index cards', 'Rubber bands', 'Paper clips',
       'Small propeller (optional)', 'Tape (probably shared)', 'Small foam / cardboard fins', 'Design worksheet',
@@ -423,7 +427,7 @@ void loop() {
     id: 'bme',
     code: 'BME',
     name: 'Biomedical Engineering Kit',
-    tagline: 'Water filters, model hands and assistive devices — engineering for people.',
+    tagline: 'Water filters, model hands and assistive devices: engineering for people.',
     studentKit: [
       'Coffee filters', 'Cotton balls', 'Sand / gravel / activated carbon, separated safely', 'Plastic cups',
       'Rubber bands', 'Straws / tubing', 'Food coloring', 'pH paper (optional)',
@@ -592,8 +596,16 @@ export const curriculum = {
   ],
 };
 
+// Merge the lesson plan (weeks, bonus lessons, final project) into each kit and the
+// step explanations into each project.
+for (const k of kits) {
+  Object.assign(k, plans[k.id]);
+  for (const p of k.projects) p.details = stepDetails[`${k.id}/${p.id}`] ?? [];
+}
+export { planInfo };
+
 export const site = {
   club: 'WHS Engineering Club',
-  title: 'Engineering Kits',
+  title: 'WHS Engineering Club',
   mission: 'Low-cost engineering kits and ready-to-teach guides that the club builds for elementary and middle school classrooms.',
 };
