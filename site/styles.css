@@ -183,17 +183,17 @@ pre.code { margin: 0; background: var(--surface); border-radius: 12px; padding: 
 }
 
 /* ========== 2. theme and pages ========== */
-/* ---------- theme: Bricolage Grotesque, warm white, one colour per kit (--kc tile, --ki ink) ---------- */
+/* ---------- theme: Space Grotesk, warm white, one colour per kit (--kc tile, --ki ink) ---------- */
 body {
   --bg: #FFFDF9; --surface: #F3F1EC; --surface-2: #EAE7E0;
   --ink: #17161A; --ink-2: #45434A; --ink-3: #6B6870; --line: #ECE8E0;
   --accent: #E8590C; --btn: #17161A; --btn-ink: #FFFFFF; --btn-hover: #2E2C32;
-  --sans: "Bricolage Grotesque", system-ui, sans-serif; --display: "Bricolage Grotesque", system-ui, sans-serif; --mono: "Bricolage Grotesque", sans-serif;
-  --display-weight: 650; --display-track: -0.035em; --r: 24px; --r-sm: 14px;
+  --sans: "Space Grotesk", system-ui, sans-serif; --display: "Space Grotesk", system-ui, sans-serif; --mono: "Space Grotesk", sans-serif;
+  --display-weight: 600; --display-track: -0.04em; --r: 24px; --r-sm: 14px;
   --kc: #F3F1EC; --ki: #17161A;
 }
-.display { font-size: clamp(40px, 5.4vw, 76px); line-height: 1.02; font-variation-settings: "opsz" 96; max-width: 15ch; }
-.h1 { font-variation-settings: "opsz" 96; }
+.display { font-size: clamp(40px, 5.4vw, 76px); line-height: 1; max-width: 15ch; }
+.big-copy, .kb-txt h3, .how h3, .numbers b, .brand, .btn, .seg button { letter-spacing: -0.03em; }
 .h2 { font-size: clamp(28px, 3.2vw, 40px); margin-bottom: 28px; }
 .btn { font-weight: 600; }
 
@@ -378,4 +378,114 @@ html[data-vt="morph"]::view-transition-group(*) { animation-duration: 380ms; ani
   .lesson summary { grid-template-columns: 1fr auto; }
   .lesson .ln { grid-column: 1 / -1; }
   .lesson-body { padding-left: 22px; }
+}
+
+/* ========== 3. home page: scroll motion ========== */
+/* Words, numbers and hairlines are driven by motion.js (class/attribute toggles). The pinned hero, the "how" columns and the
+   kit section are CSS scroll-driven animations (animation-timeline), so they run off the main thread and reverse when you scroll back.
+   Without animation-timeline support, or with reduced motion, everything just shows. */
+html, body { overflow-x: clip; } /* the full-bleed pinned scenes use 100vw, a few px wider than the page when a scrollbar shows */
+
+/* headings slide up out of a mask, word by word */
+.sm-mask { display: inline-block; overflow: clip; vertical-align: top; padding: 0.1em 0.04em; margin: -0.1em -0.04em; }
+.sm-mask > span { display: inline-block; transform: translateY(112%); transition: transform 700ms var(--ease-out); transition-delay: calc(var(--w, 0) * 45ms); }
+[data-sm-in] .sm-mask > span { transform: none; }
+.big-copy .sm-mask, .big-copy .sm-mask > span { color: inherit; font-weight: inherit; } /* ".big-copy span" is styled grey above */
+
+/* lead copy fades in after its headline */
+[data-sm-fade] { opacity: 0; transition: opacity 420ms ease-out; transition-delay: calc(var(--i, 0) * 70ms + 220ms); }
+[data-sm-fade][data-sm-in] { opacity: 1; }
+
+/* stat numbers rise into their cards, then count up */
+[data-motion] .numbers > div { overflow: clip; }
+[data-sm-num] b { transform: translateY(118%); transition: transform 760ms var(--ease-out); transition-delay: calc(var(--i, 0) * 90ms); }
+[data-sm-num][data-sm-in] b { transform: none; }
+
+/* a hairline draws under each section title */
+[data-motion] .sec .h2 { position: relative; }
+[data-motion] .sec .h2::after { content: ""; position: absolute; left: 0; right: 0; bottom: -14px; height: 1px; background: var(--ink); transform-origin: left; transform: scaleX(0); transition: transform 900ms var(--ease-in-out) 200ms; }
+[data-motion] .sec .h2[data-sm-in]::after { transform: none; }
+
+/* pinned hero: the next section slides over it; the "how a unit runs" columns arrive at different speeds */
+@supports (animation-timeline: view()) {
+  .stage-hero { position: sticky; top: 0; z-index: 0; }
+  .stage-hero ~ section { position: relative; z-index: 1; background: var(--bg); box-shadow: 0 0 0 100vmax var(--bg); clip-path: inset(0 -100vmax); }
+  #mission { padding-bottom: 8px; }
+  .stage-hero .hero-over { animation: sm-hero-out linear both; animation-timeline: scroll(root); animation-range: 0 60vh; }
+  @keyframes sm-hero-out { to { opacity: 0; transform: translateY(-40px) scale(0.98); } }
+  .stage-hero [data-hero-viewer] { animation: sm-hero-back linear both; animation-timeline: scroll(root); animation-range: 0 100vh; }
+  @keyframes sm-hero-back { to { transform: scale(0.9) translateY(-30px); opacity: 0.5; } }
+  .how > div { animation: sm-lag linear backwards; animation-timeline: view(); animation-range: entry 0% cover 45%; }
+  .how > div:nth-child(1) { --lag: 40px; } .how > div:nth-child(2) { --lag: 110px; } .how > div:nth-child(3) { --lag: 180px; }
+  @keyframes sm-lag { from { transform: translateY(var(--lag)); opacity: 0; } }
+}
+
+/* ---------- kit section: pinned "spotlight" (home page only) ----------
+   Default (phones, reduced motion, no scroll-driven animation): the normal kit cards, plus the description. */
+.spot-bar, .spot-segs, .spot-viz { display: none; }
+.spot-desc { margin-top: 10px; }
+.spot-tags { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.spot-tags li { padding: 5px 11px; border-radius: 999px; background: rgba(255,255,255,.7); color: var(--ki); font: 600 13px var(--sans); }
+
+@media (min-width: 961px) and (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .spot-pin { height: 440vh; view-timeline: --spot block; margin-top: 24px; }
+    .spot-view { --spad: max(32px, calc((100vw - 1240px) / 2 + 32px)); position: sticky; top: 0; height: 100vh; overflow: clip; margin-inline: calc(50% - 50vw); }
+    .spot-view .kit-blocks { display: block; position: relative; height: 100%; }
+    .spot-view .kblock { position: absolute; inset: 0; border-radius: 0; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); grid-template-rows: auto; align-items: center;
+      padding: 156px 0 40px var(--spad); column-gap: 8px; transform-origin: 82% 100%; }
+
+    /* the picture: a big live model that fills the right side */
+    .spot-view .kblock .tile { order: 2; position: relative; aspect-ratio: auto; height: min(calc(100vh - 196px), 840px); background: transparent; overflow: visible; }
+    .spot-view .tile img.render { opacity: 0; }
+    .spot-viz { display: block; position: absolute; inset: 0; pointer-events: none; }
+    .spot-viz canvas { display: block; width: 100%; height: 100%; pointer-events: none; opacity: 0; transform: scale(0.96); transition: opacity 600ms var(--ease-out), transform 800ms var(--ease-out); }
+    .spot-viz.on canvas { opacity: 1; transform: none; }
+    .spot-viz .viewer-labels { display: none; }
+
+    /* the words */
+    .spot-view .kb-txt { padding: 0; max-width: 470px; }
+    .spot-view .kb-txt h3 { font-size: clamp(44px, 5.4vw, 84px); line-height: 0.98; letter-spacing: -0.05em; }
+    .spot-sub { font-size: clamp(17px, 1.5vw, 21px); margin-top: 14px; color: var(--ink); font-weight: 600; }
+    .spot-desc { font-size: clamp(16px, 1.3vw, 19px); line-height: 1.55; max-width: 36ch; color: var(--ink-2); }
+    .spot-view .kb-txt span { font-size: 18px; margin-top: 26px; }
+
+    /* counter and segmented progress along the top of the pinned screen */
+    .spot-bar { display: flex; justify-content: space-between; align-items: baseline; position: absolute; top: 92px; left: var(--spad); right: var(--spad); z-index: 6; pointer-events: none; }
+    .spot-eyebrow { font: 600 15px var(--sans); color: var(--ink-2); letter-spacing: -0.01em; }
+    .spot-count { display: inline-flex; gap: 0.45em; font: 600 20px/1.25 var(--sans); color: var(--ink); font-variant-numeric: tabular-nums; }
+    .spot-roll { display: inline-block; height: 1.25em; overflow: clip; }
+    .spot-roll ul { margin: 0; padding: 0; list-style: none; animation: sm-roll linear both; animation-timeline: --spot; }
+    .spot-roll li { height: 1.25em; }
+    .spot-segs { display: flex; gap: 8px; position: absolute; top: 128px; left: var(--spad); right: var(--spad); z-index: 6; pointer-events: none; }
+    .spot-segs i { position: relative; flex: 1; height: 3px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--ink) 14%, transparent); }
+    .spot-segs i::after { content: ""; position: absolute; inset: 0; background: var(--ink); transform-origin: left; transform: scaleX(0); }
+    .spot-segs i:nth-child(1)::after { transform: none; }
+    .spot-segs i:nth-child(n+2)::after { animation: linear both; animation-timeline: --spot; }
+    .spot-segs i:nth-child(2)::after { animation-name: sm-seg-2; }
+    .spot-segs i:nth-child(3)::after { animation-name: sm-seg-3; }
+    .spot-segs i:nth-child(4)::after { animation-name: sm-seg-4; }
+
+    /* scenes 2-4 open as a circle over the previous one */
+    .spot-view .kblock:nth-child(n+2) { animation-timeline: --spot; animation-timing-function: linear; animation-fill-mode: both; }
+    .spot-view .kblock:nth-child(2) { animation-name: sm-spot-2; }
+    .spot-view .kblock:nth-child(3) { animation-name: sm-spot-3; }
+    .spot-view .kblock:nth-child(4) { animation-name: sm-spot-4; }
+    /* The block is pinned from about 19% to 81% of the way through its scroll range; each kit opens over a 14% window, then holds.
+       The counter and the segments use the same windows (and motion.js uses them to decide which scenes get a 3D model). */
+    @keyframes sm-spot-2 { 0%, 25% { clip-path: circle(0% at 82% 100%); transform: scale(1.06); } 39%, 100% { clip-path: circle(150% at 82% 100%); transform: none; } }
+    @keyframes sm-spot-3 { 0%, 45% { clip-path: circle(0% at 82% 100%); transform: scale(1.06); } 59%, 100% { clip-path: circle(150% at 82% 100%); transform: none; } }
+    @keyframes sm-spot-4 { 0%, 65% { clip-path: circle(0% at 82% 100%); transform: scale(1.06); } 79%, 100% { clip-path: circle(150% at 82% 100%); transform: none; } }
+    @keyframes sm-seg-2 { 0%, 25% { transform: scaleX(0); } 39%, 100% { transform: scaleX(1); } }
+    @keyframes sm-seg-3 { 0%, 45% { transform: scaleX(0); } 59%, 100% { transform: scaleX(1); } }
+    @keyframes sm-seg-4 { 0%, 65% { transform: scaleX(0); } 79%, 100% { transform: scaleX(1); } }
+    @keyframes sm-roll { 0%, 25% { transform: translateY(0); } 39%, 45% { transform: translateY(-1.25em); } 59%, 65% { transform: translateY(-2.5em); } 79%, 100% { transform: translateY(-3.75em); } }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sm-mask > span, [data-sm-num] b, [data-motion] .sec .h2::after { transition: none; transform: none; }
+  [data-sm-fade] { opacity: 1; transition: none; }
+  .stage-hero { position: relative; }
+  .stage-hero .hero-over, .stage-hero [data-hero-viewer], .how > div { animation: none !important; }
 }

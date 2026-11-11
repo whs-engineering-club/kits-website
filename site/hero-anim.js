@@ -1,8 +1,11 @@
-// Runs inside the site's own page. It wraps the four hero model builders so each one gets an extra animation,
-// without editing the site's model files. Parts are found by what they are (a LED has .glow, the stopwatch has .hand,
-// the bridge is the biggest group added at step 7), so the models themselves stay untouched.
+// Home-page hero animations. heroBuild() wraps a model builder so the hero plays a short story for that build:
+//   Truss bridge - weights stack up, a chord snaps, the bridge breaks into pieces, then rebuilds itself
+//   Light sensor - a lamp flashes and the LED answers it
+//   Glider       - launches off the table, climbs, glides down to the tape measure, then fades back to the start
+//   Water filter - dirty water is poured in and the stopwatch runs while clean water drips through
+// The model files stay untouched. Parts are found by what they are (a LED has .glow, the stopwatch has .hand,
+// the bridge is the biggest group added at step 7), so this only depends on those models keeping that shape.
 import * as THREE from 'three';
-import { loadModels } from '../core.js';
 
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
@@ -11,7 +14,6 @@ const easeOut = (x) => 1 - (1 - x) ** 3;
 const hash = (i, k) => { const s = Math.sin(i * 127.1 + k * 311.7) * 43758.5453; return s - Math.floor(s); };
 // A clock that starts at 0 when the model is built, so every loop begins with the model whole.
 const clock = () => { let base = null; return (t) => { base ??= t; return t - base; }; };
-const debug = (name, v) => { globalThis.__heroPhase = { name, v }; };
 
 // ---------------------------------------------------------------------------------------------------------------
 // Truss bridge: 9 s loop. 0-6 s weights stack up and the bottom chord bends (the site's own load test),
@@ -56,7 +58,6 @@ function bridgeBreak(b) {
 
   b.effect((s, t) => {
     const ph = loc(t) % 9;
-    debug('bridge', ph);
     for (const pc of pieces) {
       const o = pc.o;
       if (ph < BREAK) { o.position.copy(pc.p0); o.quaternion.copy(pc.q0); o.scale.setScalar(1); continue; }
@@ -95,7 +96,6 @@ function lightFlash(b) {
   const pulse = (x, at, rise, fall) => (x < at ? 0 : x < at + rise ? (x - at) / rise : Math.exp(-((x - at - rise) / fall) * 3));
   b.effect((s, t) => {
     const x = loc(t) % 4;
-    debug('light', x);
     const f = Math.min(1, pulse(x, 0.2, 0.05, 0.35) + pulse(x, 0.75, 0.05, 0.35) + pulse(x, 2.0, 0.08, 1.1));
     lamp.visible = true;
     if (hand) hand.visible = false;
@@ -134,7 +134,6 @@ function gliderFly(b) {
   const path = (u) => ({ x: X1 * u, y: 8.4 * Math.sin(Math.PI * u) * (1 - 0.18 * u) - 4.9 * u * u });
   b.effect((s, t) => {
     const lt = loc(t) % 9;
-    debug('glider', lt);
     ghosts.forEach((p) => { p.visible = false; });
     let u = 0, alpha = 1, nose = 0;
     if (lt < 1) nose = 0.1 * easeOut(lt); // a little nose-up before the throw
@@ -161,30 +160,18 @@ function waterTest(b) {
   const six = b.parts.filter((p) => p.userData.from === 6 && p.userData.to === 6);
   if (!six.length) return;
   b.effects = b.effects.map((fn) => (s, t) => fn(6, loc(t)));
-  b.effect((s, t) => { debug('water', loc(t) % 7); six.forEach((p) => { p.visible = true; }); });
+  b.effect((s, t) => { six.forEach((p) => { p.visible = true; }); });
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-const JOBS = [['meche', 'bridge', bridgeBreak], ['ece', 'light-sensor', lightFlash], ['aero', 'glider-wing', gliderFly], ['bme', 'water-filter', waterTest]];
-const originals = {};
+const JOBS = { 'meche/bridge': bridgeBreak, 'ece/light-sensor': lightFlash, 'aero/glider-wing': gliderFly, 'bme/water-filter': waterTest };
 
-// The unanimated builder, for the thumbnails and the Spotlight scenes.
-export const plain = (kit, proj, models) => originals[`${kit}/${proj}`] ?? models[proj];
-
-export async function install(doc) {
-  if (reduced()) return;
-  for (const [kit, proj, anim] of JOBS) {
-    const models = await loadModels(kit);
-    const key = `${kit}/${proj}`;
-    if (originals[key]) continue;
-    const orig = models[proj];
-    originals[key] = orig;
-    models[proj] = (b) => {
-      orig(b);
-      try { anim(b); } catch (e) { console.warn('hero animation skipped for', key, e); }
-    };
-  }
-  // rebuild the hero model so the one on screen picks up its animation
-  const chip = doc.querySelector('[data-hero-chips] [aria-pressed="true"]');
-  if (chip) { chip.setAttribute('aria-pressed', 'false'); chip.click(); }
+// The hero's builder for a model: the site's own builder plus its animation. Thumbnails and the kit scenes use the plain builder.
+export function heroBuild(kit, proj, build) {
+  const anim = JOBS[`${kit}/${proj}`];
+  if (!anim || reduced()) return build;
+  return (b) => {
+    build(b);
+    try { anim(b); } catch (e) { console.warn('hero animation skipped for', kit, proj, e); }
+  };
 }

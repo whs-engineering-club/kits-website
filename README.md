@@ -2,7 +2,7 @@
 
 A site for the club's four low-cost engineering kits for Title I classrooms (ECE, Mechanical, Aerospace, Biomedical): what is in each kit, the week-by-week lesson plan, bonus lessons, a step-by-step build guide with a 3D model for every step of every project, and the three-class Intro to Arduino mini-unit.
 
-Each kit has its own colour, which follows it into tiles, headers and the 3D background. Type is Bricolage Grotesque.
+Each kit has its own colour, which follows it into tiles, headers and the 3D background. Type is Space Grotesk.
 
 ## Layout
 
@@ -15,6 +15,8 @@ Each kit has its own colour, which follows it into tiles, headers and the 3D bac
 | `site/app.js` | Page templates (home, kits, kit, build, Arduino unit). |
 | `site/core.js` | Router, shared page blocks, and the build-page controller that keeps the steps and the 3D model in sync. |
 | `site/viewer.js` | The 3D step viewer and the thumbnail renderer (three.js, vendored in `site/vendor/`). |
+| `site/motion.js` | Home-page scroll motion: word-mask headings, number and hairline reveals, and the live 3D model in each pinned kit scene. The pinned hero and the kit section itself are CSS scroll-driven animations (section 3 of `styles.css`). Everything is skipped under reduced motion. |
+| `site/hero-anim.js` | The home hero's per-build animations (bridge breaks, light flashes, glider flies, water filter runs). Wraps the model builders, so `site/models/` is untouched. |
 | `site/vendor/number-flow.js` | NumberFlow 0.6.2 (MIT), vendored; animates the stats and the step counter. |
 | `site/models/<kit>.js` | One 3D model per project. Each part is tagged with the step that adds it. |
 | `scripts/shots.cjs` | Renders every step of a model to one image: `node scripts/shots.cjs ece/led-circuit out.png`. |

@@ -1,8 +1,10 @@
 // Page templates. Each kit has its own colour (tile + ink) that follows it into tiles,
 // headers and the 3D background. Pictures carry a view-transition-name so they glide
 // between pages; build steps are one card at a time that you can drag or flick.
-import { KITS, STATS, COPY, HERO, FEATURE, PLANS, CURRICULUM, B, esc, shortTitle, store, details, setPages, route, bindHero, bindJumps, bindBuild, reduced } from './core.js';
+import { KITS, STATS, COPY, HERO, FEATURE, PLANS, CURRICULUM, B, esc, shortTitle, store, details, setPages, route, bindHero, bindJumps, bindBuild, reduced, pad } from './core.js';
+import { bindMotion, bindSpotlight } from './motion.js';
 
+const KITS_TITLE = 'Choose your kind of engineering';
 const KC = {
   ece: { tile: '#E6ECFF', hex: 0xe6ecff, ink: '#3451C7' },
   meche: { tile: '#FFE8DA', hex: 0xffe8da, ink: '#B93D0B' },
@@ -121,13 +123,20 @@ const pages = {
       <div class="two"><p>${esc(COPY.kitsPara)}</p><p>${esc(COPY.clubPara)}</p></div>
     </section>
 
-    <section class="wrap sec">
-      <h2 class="h2">Choose your kind of engineering</h2>
-      <div class="kit-blocks">${KITS.map((k) => `
-        <a class="kblock" href="#/kits/${k.id}" style="${kvars(k.id)}">
-          <div class="tile" ${pic(`pic-${k.id}`)}>${B.render(k.id, FEATURE[k.id])}</div>
-          <div class="kb-txt"><h3>${esc(k.short)}</h3><p>${esc(k.subject)}</p><span>${k.projects.length} builds · ${k.weeks.length} weeks →</span></div>
-        </a>`).join('')}</div>
+    <section class="wrap sec" id="kits">
+      <h2 class="h2">${esc(KITS_TITLE)}</h2>
+      <div class="spot-pin"><div class="spot-view">
+        <div class="spot-bar" aria-hidden="true"><span class="spot-eyebrow">${esc(KITS_TITLE)}</span>
+          <span class="spot-count"><span class="spot-roll"><ul>${KITS.map((_, i) => `<li>${pad(i + 1)}</li>`).join('')}</ul></span><span>/ ${pad(KITS.length)}</span></span></div>
+        <div class="spot-segs" aria-hidden="true">${KITS.map(() => '<i></i>').join('')}</div>
+        <div class="kit-blocks">${KITS.map((k) => `
+          <a class="kblock" href="#/kits/${k.id}" data-kit="${k.id}" style="${kvars(k.id)}">
+            <div class="tile" ${pic(`pic-${k.id}`)}>${B.render(k.id, FEATURE[k.id])}<div class="spot-viz viewer" aria-hidden="true"></div></div>
+            <div class="kb-txt"><h3>${esc(k.short)}</h3><p class="spot-sub">${esc(k.subject)}</p><p class="spot-desc">${esc(k.tagline)}</p>
+              <ul class="spot-tags" aria-label="Ideas covered">${k.concepts.slice(0, 4).map((c) => `<li>${esc(c)}</li>`).join('')}</ul>
+              <span>${k.projects.length} builds · ${k.weeks.length} weeks →</span></div>
+          </a>`).join('')}</div>
+      </div></div>
     </section>
 
     <section class="wrap sec"><h2 class="h2">How a unit runs</h2>
@@ -136,6 +145,8 @@ const pages = {
     <section class="wrap sec narrow"><h2 class="h2">Questions</h2>${B.faq()}</section>`,
     after: (root) => {
       bindHero(root, theme);
+      bindMotion(root);
+      bindSpotlight(root, theme);
       const stage = root.querySelector('[data-hero-stage]');
       root.querySelector('[data-hero-chips]').addEventListener('click', (e) => {
         const c = e.target.closest('[data-k]');

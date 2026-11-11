@@ -1,6 +1,7 @@
 // Data, helpers, reusable HTML blocks, the build-page controller (steps <-> 3D model)
 // and the hash router. Page templates live in app.js.
 import { mountViewer, snapshot } from './viewer.js';
+import { heroBuild } from './hero-anim.js';
 
 // ---------- data ----------
 const SHORT = { ece: 'Electrical', meche: 'Mechanical', aero: 'Aerospace', bme: 'Biomedical' };
@@ -166,7 +167,7 @@ export function bindHero(root, theme) {
   let token = 0;
   async function show(kitId, projId, first) {
     const mine = ++token;
-    const build = (await loadModels(kitId))[projId];
+    const build = heroBuild(kitId, projId, (await loadModels(kitId))[projId]);
     if (mine !== token || !el.isConnected) return;
     if (viewer && !first && !reduced()) {
       el.classList.add('leaving');
