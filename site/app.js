@@ -1,8 +1,10 @@
 // Page templates. Each kit has its own colour (tile + ink) that follows it into tiles,
 // headers and the 3D background. Pictures carry a view-transition-name so they glide
 // between pages; build steps are one card at a time that you can drag or flick.
-import { KITS, STATS, COPY, HERO, FEATURE, PLANS, CURRICULUM, B, esc, shortTitle, store, details, setPages, route, bindHero, bindJumps, bindBuild, reduced } from './core.js';
+import { KITS, STATS, COPY, HERO, FEATURE, PLANS, CURRICULUM, B, esc, shortTitle, store, details, setPages, route, bindHero, bindJumps, bindBuild, reduced, pad } from './core.js';
+import { bindMotion, bindSpotlight } from './motion.js';
 
+const KITS_TITLE = 'Choose your kind of engineering';
 const KC = {
   ece: { tile: '#E6ECFF', hex: 0xe6ecff, ink: '#3451C7' },
   meche: { tile: '#FFE8DA', hex: 0xffe8da, ink: '#B93D0B' },
@@ -119,16 +121,22 @@ const pages = {
         <div><b data-countup="${STATS.steps}">${STATS.steps}</b>steps in 3D</div><div><b data-countup="${STATS.bonus}">${STATS.bonus}</b>bonus lessons</div>
       </div>
       <div class="two"><p>${esc(COPY.kitsPara)}</p><p>${esc(COPY.clubPara)}</p></div>
-      <p class="fine">${esc(COPY.costNote)}</p>
     </section>
 
-    <section class="wrap sec">
-      <h2 class="h2">Choose your kind of engineering</h2>
-      <div class="kit-blocks">${KITS.map((k) => `
-        <a class="kblock" href="#/kits/${k.id}" style="${kvars(k.id)}">
-          <div class="tile" ${pic(`pic-${k.id}`)}>${B.render(k.id, FEATURE[k.id])}</div>
-          <div class="kb-txt"><h3>${esc(k.short)}</h3><p>${esc(k.subject)}</p><span>${k.projects.length} builds · ${k.weeks.length} weeks →</span></div>
-        </a>`).join('')}</div>
+    <section class="wrap sec" id="kits">
+      <h2 class="h2">${esc(KITS_TITLE)}</h2>
+      <div class="spot-pin"><div class="spot-view">
+        <div class="spot-bar" aria-hidden="true"><span class="spot-eyebrow">${esc(KITS_TITLE)}</span>
+          <span class="spot-count"><span class="spot-roll"><ul>${KITS.map((_, i) => `<li>${pad(i + 1)}</li>`).join('')}</ul></span><span>/ ${pad(KITS.length)}</span></span></div>
+        <div class="spot-segs" aria-hidden="true">${KITS.map(() => '<i></i>').join('')}</div>
+        <div class="kit-blocks">${KITS.map((k) => `
+          <a class="kblock" href="#/kits/${k.id}" data-kit="${k.id}" style="${kvars(k.id)}">
+            <div class="tile" ${pic(`pic-${k.id}`)}>${B.render(k.id, FEATURE[k.id])}<div class="spot-viz viewer" aria-hidden="true"></div></div>
+            <div class="kb-txt"><h3>${esc(k.short)}</h3><p class="spot-sub">${esc(k.subject)}</p><p class="spot-desc">${esc(k.tagline)}</p>
+              <ul class="spot-tags" aria-label="Ideas covered">${k.concepts.slice(0, 4).map((c) => `<li>${esc(c)}</li>`).join('')}</ul>
+              <span>${k.projects.length} builds · ${k.weeks.length} weeks →</span></div>
+          </a>`).join('')}</div>
+      </div></div>
     </section>
 
     <section class="wrap sec"><h2 class="h2">How a unit runs</h2>
@@ -137,6 +145,8 @@ const pages = {
     <section class="wrap sec narrow"><h2 class="h2">Questions</h2>${B.faq()}</section>`,
     after: (root) => {
       bindHero(root, theme);
+      bindMotion(root);
+      bindSpotlight(root, theme);
       const stage = root.querySelector('[data-hero-stage]');
       root.querySelector('[data-hero-chips]').addEventListener('click', (e) => {
         const c = e.target.closest('[data-k]');
@@ -158,10 +168,10 @@ const pages = {
     html: `
     <div class="kit-band" style="${kvars(k.id)}"><div class="wrap band-in">
       <div>${B.crumbs([['Home', '#/'], ['Kits', '#/kits'], [k.short]])}<h1 class="h1">${esc(k.subject)}</h1><p class="lead">${esc(k.tagline)}</p>
-        <p class="facts"><span>${k.projects.length} builds</span><span>${k.weeks.length} weeks</span>${k.cost ? `<span>${esc(k.cost.replace(/^Student kit: around /, ''))} per kit</span>` : ''}</p></div>
+        <p class="facts"><span>${k.projects.length} builds</span><span>${k.weeks.length} weeks</span></p></div>
       <div class="tile band-tile" ${pic(`pic-${k.id}`)}>${B.render(k.id, FEATURE[k.id])}</div></div></div>
     <div class="wrap" style="${kvars(k.id)}">
-      <nav class="subnav" aria-label="On this page">${[...sections.slice(0, 4), ...(k.sourcing ? [['buy', 'Where to buy']] : []), sections[4]].map(([id, l]) => `<a href="#/kits/${k.id}" data-scroll="${id}">${l}</a>`).join('')}</nav>
+      <nav class="subnav" aria-label="On this page">${sections.map(([id, l]) => `<a href="#/kits/${k.id}" data-scroll="${id}">${l}</a>`).join('')}</nav>
       <section class="sec anchor" id="builds"><h2 class="h2">Builds</h2>
         <div class="grid-3">${k.projects.map((p, i) => `
           <a class="bcard" href="#/kits/${k.id}/${p.id}"><div class="tile" ${pic(`pic-${k.id}-${p.id}`)}>${B.render(k.id, p.id)}<span class="badge">${i + 1}</span></div>
@@ -169,9 +179,6 @@ const pages = {
       <section class="sec anchor" id="materials"><h2 class="h2">What's in the bag</h2>${B.materials(k)}</section>
       <section class="sec anchor" id="concepts"><h2 class="h2">Concepts covered</h2>${B.concepts(k)}</section>
       <section class="sec anchor" id="bonus"><h2 class="h2">Bonus builds</h2><p class="intro">For classrooms with the shared toolbox.</p>${B.bonus(k)}</section>
-      ${k.sourcing ? `<section class="sec anchor" id="buy"><h2 class="h2">Where to buy the parts</h2>
-        <p class="intro">Links the club collected for single packs and bulk orders. Prices and stock change, so check before ordering.</p>
-        <div class="buy">${k.sourcing.map((g) => `<div><h3>${esc(g.part)}</h3>${g.links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.label)} ↗${l.note ? `<small>${esc(l.note)}</small>` : ''}</a>`).join('')}</div>`).join('')}</div></section>` : ''}
       <section class="sec anchor narrow" id="plan"><h2 class="h2">Lesson plan</h2><p class="intro">${esc(PLANS.format)}</p>${B.plan(k)}
         ${CURRICULUM.kit === k.id ? `<a class="extra" href="#/curriculum"><b>${esc(CURRICULUM.title)}</b><span>${esc(CURRICULUM.summary)}</span></a>` : ''}</section>
     </div>`,
