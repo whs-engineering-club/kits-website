@@ -1,6 +1,6 @@
 # WHS Engineering Club kits website
 
-A site for the club's four low-cost engineering kits for Title I classrooms (ECE, Mechanical, Aerospace, Biomedical): what is in each kit, the week-by-week lesson plan, bonus lessons, where to buy the parts, a step-by-step build guide with a 3D model for every step of every project, and the three-class Intro to Arduino mini-unit.
+A site for the club's four low-cost engineering kits for Title I classrooms (ECE, Mechanical, Aerospace, Biomedical): what is in each kit, the week-by-week lesson plan, bonus lessons, a step-by-step build guide with a 3D model for every step of every project, and the three-class Intro to Arduino mini-unit.
 
 Each kit has its own colour, which follows it into tiles, headers and the 3D background. Type is Bricolage Grotesque.
 
@@ -8,7 +8,7 @@ Each kit has its own colour, which follows it into tiles, headers and the 3D bac
 
 | Path | What it is |
 | --- | --- |
-| `data/kits.mjs` | Kit content: parts, concepts, build guides, sourcing, the Arduino mini-unit. Edit this, then run `npm run build`. |
+| `data/kits.mjs` | Kit content: parts, concepts, build guides, the Arduino mini-unit. Edit this, then run `npm run build`. |
 | `data/plans.mjs` | Week-by-week lesson plans and bonus lessons for each kit (from the club's lesson-plan document). |
 | `data/step-details.mjs` | A short "what this step does and why" note for every build step. |
 | `site/` | The frontend (plain HTML/CSS/JS, no build tools). `site/data.js` is generated. |

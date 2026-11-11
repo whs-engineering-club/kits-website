@@ -119,7 +119,6 @@ const pages = {
         <div><b data-countup="${STATS.steps}">${STATS.steps}</b>steps in 3D</div><div><b data-countup="${STATS.bonus}">${STATS.bonus}</b>bonus lessons</div>
       </div>
       <div class="two"><p>${esc(COPY.kitsPara)}</p><p>${esc(COPY.clubPara)}</p></div>
-      <p class="fine">${esc(COPY.costNote)}</p>
     </section>
 
     <section class="wrap sec">
@@ -158,10 +157,10 @@ const pages = {
     html: `
     <div class="kit-band" style="${kvars(k.id)}"><div class="wrap band-in">
       <div>${B.crumbs([['Home', '#/'], ['Kits', '#/kits'], [k.short]])}<h1 class="h1">${esc(k.subject)}</h1><p class="lead">${esc(k.tagline)}</p>
-        <p class="facts"><span>${k.projects.length} builds</span><span>${k.weeks.length} weeks</span>${k.cost ? `<span>${esc(k.cost.replace(/^Student kit: around /, ''))} per kit</span>` : ''}</p></div>
+        <p class="facts"><span>${k.projects.length} builds</span><span>${k.weeks.length} weeks</span></p></div>
       <div class="tile band-tile" ${pic(`pic-${k.id}`)}>${B.render(k.id, FEATURE[k.id])}</div></div></div>
     <div class="wrap" style="${kvars(k.id)}">
-      <nav class="subnav" aria-label="On this page">${[...sections.slice(0, 4), ...(k.sourcing ? [['buy', 'Where to buy']] : []), sections[4]].map(([id, l]) => `<a href="#/kits/${k.id}" data-scroll="${id}">${l}</a>`).join('')}</nav>
+      <nav class="subnav" aria-label="On this page">${sections.map(([id, l]) => `<a href="#/kits/${k.id}" data-scroll="${id}">${l}</a>`).join('')}</nav>
       <section class="sec anchor" id="builds"><h2 class="h2">Builds</h2>
         <div class="grid-3">${k.projects.map((p, i) => `
           <a class="bcard" href="#/kits/${k.id}/${p.id}"><div class="tile" ${pic(`pic-${k.id}-${p.id}`)}>${B.render(k.id, p.id)}<span class="badge">${i + 1}</span></div>
@@ -169,9 +168,6 @@ const pages = {
       <section class="sec anchor" id="materials"><h2 class="h2">What's in the bag</h2>${B.materials(k)}</section>
       <section class="sec anchor" id="concepts"><h2 class="h2">Concepts covered</h2>${B.concepts(k)}</section>
       <section class="sec anchor" id="bonus"><h2 class="h2">Bonus builds</h2><p class="intro">For classrooms with the shared toolbox.</p>${B.bonus(k)}</section>
-      ${k.sourcing ? `<section class="sec anchor" id="buy"><h2 class="h2">Where to buy the parts</h2>
-        <p class="intro">Links the club collected for single packs and bulk orders. Prices and stock change, so check before ordering.</p>
-        <div class="buy">${k.sourcing.map((g) => `<div><h3>${esc(g.part)}</h3>${g.links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.label)} ↗${l.note ? `<small>${esc(l.note)}</small>` : ''}</a>`).join('')}</div>`).join('')}</div></section>` : ''}
       <section class="sec anchor narrow" id="plan"><h2 class="h2">Lesson plan</h2><p class="intro">${esc(PLANS.format)}</p>${B.plan(k)}
         ${CURRICULUM.kit === k.id ? `<a class="extra" href="#/curriculum"><b>${esc(CURRICULUM.title)}</b><span>${esc(CURRICULUM.summary)}</span></a>` : ''}</section>
     </div>`,

@@ -21,7 +21,7 @@ class HttpError extends Error {
 }
 
 const kitSummary = (k) => ({
-  id: k.id, code: k.code, name: k.name, tagline: k.tagline, cost: k.cost ?? null,
+  id: k.id, code: k.code, name: k.name, tagline: k.tagline,
   projects: k.projects.map((p) => ({ id: p.id, title: p.title, level: p.level, time: p.time, steps: p.steps.length })),
 });
 

@@ -18,7 +18,6 @@ export const kits = [
     code: 'ECE',
     name: 'Electrical & Computer Engineering Kit',
     tagline: 'Circuits, sensors and code, from a single LED to a working alarm.',
-    cost: 'Student kit: around $3–$5',
     studentKit: [
       'Mini breadboard',
       '5 LEDs',
@@ -43,45 +42,6 @@ export const kits = [
     concepts: [
       'Complete circuits', 'Voltage and ground', 'Current limiting', 'LED polarity',
       'Inputs and outputs', 'Digital pins', 'Sensors', 'Programs and loops',
-    ],
-    sourcing: [
-      {
-        part: 'Resistors and LEDs',
-        links: [
-          { label: 'Amazon – resistor & LED assortment', url: 'https://www.amazon.com/WayinTop-Resistor-Assortment-Respberry-Resistors/dp/B07YWNHZHS' },
-          { label: 'Alibaba – resistor & LED kit', note: 'minimum order 1 piece', url: 'https://www.alibaba.com/product-detail/Metal-Film-Resistor-Assortment-kit-LED_1600094619956.html' },
-          { label: 'Alibaba – 1818-piece components kit', url: 'https://www.alibaba.com/product-detail/1818PCS-Electronic-Components-Diy-Kit-Metal_1601178397454.html' },
-        ],
-      },
-      {
-        part: 'Breadboard',
-        links: [
-          { label: 'Amazon – breadboard pack', url: 'https://www.amazon.com/ZUQIAN-Breadboard-Breadboards-Distribution-Electronics/dp/B0CWKQFR97' },
-          { label: 'Alibaba – 170-point mini breadboard', note: 'cheapest; 10 order minimum', url: 'https://www.alibaba.com/product-detail/China-Manufacturer-Bulk-170-Points-Mini_402044081.html' },
-        ],
-      },
-      {
-        part: 'Microcontroller',
-        links: [
-          { label: 'Amazon – ELEGOO ESP32 board', url: 'https://www.amazon.com/ELEGOO-ESP-WROOM-32-Development-Bluetooth-Microcontroller/dp/B0D8T53CQ5' },
-          { label: 'Alibaba – ATmega328P Uno-style board', note: 'best option; 500+ orders, no minimum', url: 'https://www.alibaba.com/product-detail/High-Quality-MEGA328P-for-Arduinos-UNO_1601291969226.html' },
-        ],
-      },
-      {
-        part: 'Buzzer',
-        links: [
-          { label: 'Amazon – passive buzzers', url: 'https://www.amazon.com/Passive-Resistance-Electronic-Magnetic-Continuous/dp/B0F1KFHSNK' },
-          { label: 'Alibaba – buzzer', note: 'minimum 100 pieces ($9)', url: 'https://www.alibaba.com/product-detail/FS-12085-3V-16R-5V-42R_1601379067085.html' },
-        ],
-      },
-      {
-        part: 'Servo',
-        links: [
-          { label: 'Amazon – 10-pack SG90 servos', url: 'https://www.amazon.com/10Pcs-Servos-Helicopter-Airplane-Controls/dp/B08KY49SFX' },
-          { label: 'Alibaba – SG90 9g micro servo', url: 'https://www.alibaba.com/product-detail/SG90-9G-Mini-Micro-Servo-Steering_1601784400178.html' },
-          { label: 'Alibaba – SG90 / MG90S servo', url: 'https://www.alibaba.com/product-detail/SG90-MG90S-9g-Digital-Servo-14g_1601784374336.html' },
-        ],
-      },
     ],
     projects: [
       p('led-circuit', 'Build a basic LED circuit', '20 min', 'Starter',
