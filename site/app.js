@@ -1,384 +1,233 @@
-const DATA = window.KITS_DATA;
-const main = document.getElementById('main');
-let cleanup = []; // disposers for the current page (3D viewers, timers, listeners)
+// Page templates. Each kit has its own colour (tile + ink) that follows it into tiles,
+// headers and the 3D background. Pictures carry a view-transition-name so they glide
+// between pages; build steps are one card at a time that you can drag or flick.
+import { KITS, STATS, COPY, HERO, FEATURE, PLANS, CURRICULUM, B, esc, shortTitle, store, details, setPages, route, bindHero, bindJumps, bindBuild, reduced } from './core.js';
 
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const store = {
-  get(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } },
-  set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ } },
+const KC = {
+  ece: { tile: '#E6ECFF', hex: 0xe6ecff, ink: '#3451C7' },
+  meche: { tile: '#FFE8DA', hex: 0xffe8da, ink: '#B93D0B' },
+  aero: { tile: '#DCF1EE', hex: 0xdcf1ee, ink: '#0B6E80' },
+  bme: { tile: '#E3F1DF', hex: 0xe3f1df, ink: '#237A38' },
 };
-const kitById = (id) => DATA.kits.find((k) => k.id === id);
-const list = (items) => `<ul class="list">${items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>`;
-const totalProjects = DATA.kits.reduce((n, k) => n + k.projects.length, 0);
-const totalSteps = DATA.kits.reduce((n, k) => n + k.projects.reduce((m, p) => m + p.steps.length, 0), 0);
-const reached = (key) => { const v = store.get('kits-progress', {})[key]; return Array.isArray(v) ? v.length : (v || 0); };
+const theme = (kitId) => ({ bg: KC[kitId]?.hex ?? 0xf3f1ec, shadow: 0.14 });
+const kvars = (id) => `--kc:${KC[id].tile};--ki:${KC[id].ink}`;
+const pic = (name) => B.vt(name);
+const sections = [['builds', 'Builds'], ['materials', 'Materials'], ['concepts', 'Concepts'], ['bonus', 'Bonus builds'], ['plan', 'Lesson plan']];
 
-// ---------- 3D stepper (shared by the home demo and every guide page) ----------
-const stepperHtml = (extraHead = '') => `
-  <div class="viewer" data-viewer><p class="viewer-loading">Loading 3D model…</p></div>
-  <aside class="demo-side">
-    ${extraHead}
-    <ol class="step-list" data-steps></ol>
-    <div class="side-foot">
-      <div class="timer"><span data-now>1</span><small>/ <span data-total>1</span></small></div>
-      <div class="btns">
-        <button class="btn btn-small btn-ghost" data-prev aria-label="Previous step">← Back</button>
-        <button class="btn btn-small" data-next>Next <span aria-hidden="true">→</span></button>
-      </div>
-    </div>
-  </aside>`;
-
-async function mountStepper(root, kit, pr, { auto = false, remember = false } = {}) {
-  const key = `${kit.id}/${pr.id}`;
-  const viewerEl = root.querySelector('[data-viewer]');
-  const listEl = root.querySelector('[data-steps]');
-  const total = pr.steps.length;
-  let step = 1;
-  let viewer = null;
-  let timer = 0;
-  let dead = false;
-
-  root.querySelector('[data-total]').textContent = total;
-  listEl.innerHTML = pr.steps.map((s, i) => `<li><button class="step-btn" data-step="${i + 1}"><b>${String(i + 1).padStart(2, '0')}</b><span>${esc(s)}</span></button></li>`).join('');
-  const btns = [...listEl.querySelectorAll('.step-btn')];
-
-  function show(n, user = false) {
-    step = Math.max(1, Math.min(total, n));
-    if (user) stopAuto();
-    viewer?.setStep(step);
-    btns.forEach((b, i) => {
-      b.classList.toggle('done', i + 1 < step);
-      i + 1 === step ? b.setAttribute('aria-current', 'step') : b.removeAttribute('aria-current');
-    });
-    const cur = btns[step - 1];
-    listEl.scrollTo({ top: cur.offsetTop - listEl.offsetTop - 40, behavior: 'smooth' });
-    root.querySelector('[data-now]').textContent = step;
-    root.querySelector('[data-prev]').disabled = step === 1;
-    root.querySelector('[data-next]').disabled = step === total;
-    if (remember && step > reached(key)) { const all = store.get('kits-progress', {}); all[key] = step; store.set('kits-progress', all); }
-  }
-  function stopAuto() { clearInterval(timer); timer = 0; }
-
-  listEl.onclick = (e) => { const b = e.target.closest('.step-btn'); if (b) show(Number(b.dataset.step), true); };
-  root.querySelector('[data-prev]').onclick = () => show(step - 1, true);
-  root.querySelector('[data-next]').onclick = () => show(step + 1, true);
-  viewerEl.addEventListener('pointerdown', stopAuto);
-  show(1);
-
-  const dispose = () => { dead = true; stopAuto(); viewer?.dispose(); };
-  try {
-    const [{ mountViewer }, models] = await Promise.all([import('./viewer.js'), import(`./models/${kit.id}.js`)]);
-    if (dead) return dispose;
-    const build = models.default[pr.id];
-    if (!build) throw new Error('no model');
-    viewer = mountViewer(viewerEl, build, { step });
-    if (viewer) {
-      viewerEl.insertAdjacentHTML('beforeend', '<span class="viewer-hint">drag to rotate · scroll to zoom</span>');
-      if (auto && !matchMedia('(prefers-reduced-motion: reduce)').matches) timer = setInterval(() => show(step === total ? 1 : step + 1), 3800);
-    }
-  } catch {
-    if (!dead) viewerEl.innerHTML = '<p class="viewer-fallback">The 3D model could not be loaded. Follow the written steps on the right.</p>';
-  }
-  dispose.show = (n) => show(n, true);
-  dispose.next = () => show(step + 1, true);
-  dispose.prev = () => show(step - 1, true);
-  return dispose;
-}
-
-// ---------- views ----------
-const kitCard = (k) => `
-  <a class="kit-card reveal" href="#/kits/${k.id}">
-    <span class="kit-code">${esc(k.code)} KIT</span>
-    <h3>${esc(k.name)}</h3>
-    <p>${esc(k.tagline)}</p>
-    <pre class="mini">${k.projects.slice(0, 3).map((p, i) => `<span class="o">${String(i + 1).padStart(2, '0')}</span> ${esc(p.title.replace(/:.*/, ''))}`).join('\n')}
-<span class="m">+ ${k.projects.length - 3} more</span></pre>
-    <span class="more">${k.projects.length} build guides →</span>
-  </a>`;
-
-const FEATURED = [['ece', 'led-circuit', 'LED circuit'], ['meche', 'bridge', 'Truss bridge'], ['aero', 'balloon-rocket', 'Balloon rocket'], ['bme', 'water-filter', 'Water filter']];
-
-function home() {
-  return `
-  <section class="hero">
-    <div class="wrap hero-copy">
-      <p class="eyebrow"><span class="dot"></span> ${esc(DATA.site.club)} · ${DATA.kits.length} kits · ${totalProjects} builds</p>
-      <h1>Engineering kits you<br>build step by step.</h1>
-      <p class="lede">Low-cost kits for elementary and middle school classrooms. Every project comes with a 3D model that shows exactly what each step looks like, so any teacher can run it.</p>
-      <div class="hero-ctas">
-        <a class="btn" href="#/kits">Pick a kit <span aria-hidden="true">→</span></a>
-        <a class="link" href="#/curriculum">Arduino lesson plans <span aria-hidden="true">→</span></a>
-      </div>
-    </div>
-    <div class="wrap">
-      <div class="demo" id="home-demo">${stepperHtml(`
-        <div class="side-head"><span class="pulse"></span> Build guide <span class="muted" id="demo-kit"></span></div>
-        <div class="prompt-chips">${FEATURED.map(([k, p, label], i) => `<button class="chip${i ? '' : ' active'}" data-kit="${k}" data-project="${p}">${label}</button>`).join('')}</div>`)}
-      </div>
-      <p class="caption">A real guide from the site. It plays by itself; click a step or drag the model to take over. <a class="link" id="demo-open" href="#/kits/ece/led-circuit">Open this guide →</a></p>
-    </div>
-  </section>
-
-  <section class="strip">
-    <div class="wrap strip-inner">
-      <span class="muted">Covers</span>
-      ${DATA.kits.map((k) => `<a class="logo-pill" href="#/kits/${k.id}">${esc(k.name.replace(' Kit', ''))}</a>`).join('')}
-      <a class="logo-pill" href="#/curriculum">Intro to Arduino</a>
-    </div>
-  </section>
-
-  <section class="section" id="how">
-    <div class="wrap">
-      <p class="kicker">How it works</p>
-      <h2>See the build<br>before you build it.</h2>
-      <p class="sub">Written instructions leave a lot to guesswork. Each guide here pairs every step with a 3D model: the new part drops into place, the camera moves to it, and you can turn it around to see where everything connects.</p>
-      <div class="how-grid">
-        <article class="how-card reveal"><div class="how-num">01</div><h3>Open the kit</h3>
-          <p>Each kit page lists what goes in every student bag and what the classroom shares.</p>
-          <pre class="mini"><span class="m">ECE student kit · $3–$5</span>
-<span class="o">›</span> Mini breadboard
-<span class="o">›</span> 5 LEDs, 5 resistors
-<span class="o">›</span> Button, buzzer, sensor</pre></article>
-        <article class="how-card reveal"><div class="how-num">02</div><h3>Follow the 3D steps</h3>
-          <p>Click through the steps. The model shows what to add and labels where it goes.</p>
-          <pre class="mini"><span class="ok">✓</span> LED into two columns
-<span class="ok">✓</span> Resistor to the long leg
-<span class="o">&gt;&gt;</span> Battery + to the resistor
-<span class="m">   Battery − to the LED</span></pre></article>
-        <article class="how-card reveal"><div class="how-num">03</div><h3>Test, then go further</h3>
-          <p>Every guide ends with a test, the science behind it, and a challenge to push the design.</p>
-          <pre class="mini"><span class="m">Test</span>   pull one wire: LED off
-<span class="m">Why</span>    a circuit is a loop
-<span class="m">Next</span>   <span class="s">"add a second LED"</span></pre></article>
-      </div>
-    </div>
-  </section>
-
-  <section class="section section-alt" id="kits">
-    <div class="wrap">
-      <p class="kicker">The kits</p>
-      <h2>Four kits.<br>Four kinds of engineering.</h2>
-      <p class="sub">Each one has a low-cost bag for every student and a shared classroom toolbox for the equipment that gets reused.</p>
-      <div class="kit-grid">${DATA.kits.map(kitCard).join('')}</div>
-    </div>
-  </section>
-
-  <section class="section">
-    <div class="wrap">
-      <p class="kicker">In every guide</p>
-      <h2>Built so a teacher<br>can run it cold.</h2>
-      <div class="feat-grid">
-        <article class="feat reveal"><div class="feat-ico">◈</div><h3>3D model per step</h3><p>Rotate and zoom the build at every stage. New parts are highlighted and labelled.</p></article>
-        <article class="feat reveal"><div class="feat-ico">☰</div><h3>Exact materials</h3><p>A parts list for each project, drawn from the student kit and the classroom toolbox.</p></article>
-        <article class="feat reveal"><div class="feat-ico">✓</div><h3>A test that proves it</h3><p>Each build ends with a clear check, so students know whether it works.</p></article>
-        <article class="feat reveal"><div class="feat-ico">?</div><h3>The why</h3><p>A short plain-language explanation of the engineering idea behind the build.</p></article>
-        <article class="feat reveal"><div class="feat-ico">{ }</div><h3>Code included</h3><p>Microcontroller projects come with a complete, commented Arduino sketch.</p></article>
-        <article class="feat reveal"><div class="feat-ico">↗</div><h3>A capstone</h3><p>Every kit finishes with an open-ended project where students design their own solution.</p></article>
-      </div>
-    </div>
-  </section>
-
-  <section class="section section-alt stats-sec">
-    <div class="wrap stats">
-      <div class="stat reveal"><b>${DATA.kits.length}</b><span>engineering disciplines</span></div>
-      <div class="stat reveal"><b>${totalProjects}</b><span>projects with 3D build guides</span></div>
-      <div class="stat reveal"><b>${totalSteps}</b><span>modelled steps across all kits</span></div>
-      <div class="stat reveal"><b>$3–5</b><span>per ECE student kit</span></div>
-    </div>
-  </section>
-
-  <section class="section cta">
-    <div class="wrap cta-inner">
-      <h2>Start with the first build.</h2>
-      <p class="sub">Pick a kit, open the first guide, and build along with the 3D model.</p>
-      <div class="hero-ctas center">
-        <a class="btn" href="#/kits">Browse the kits <span aria-hidden="true">→</span></a>
-        <a class="link" href="#/curriculum">Arduino lesson plans <span aria-hidden="true">→</span></a>
-      </div>
-    </div>
-  </section>`;
-}
-
-function bindHome() {
-  const demo = document.getElementById('home-demo');
-  let dispose = null;
-  let token = 0;
-  async function load(kitId, projectId) {
-    const mine = ++token;
-    dispose?.();
-    const kit = kitById(kitId);
-    const pr = kit.projects.find((p) => p.id === projectId);
-    document.getElementById('demo-kit').textContent = `· ${kit.code} kit`;
-    document.getElementById('demo-open').href = `#/kits/${kitId}/${projectId}`;
-    demo.querySelector('[data-viewer]').innerHTML = '<p class="viewer-loading">Loading 3D model…</p>';
-    const d = await mountStepper(demo, kit, pr, { auto: true });
-    if (mine !== token) d(); else dispose = d;
-  }
-  demo.querySelector('.prompt-chips').onclick = (e) => {
-    const chip = e.target.closest('.chip');
-    if (!chip) return;
-    demo.querySelectorAll('.chip').forEach((c) => c.classList.toggle('active', c === chip));
-    load(chip.dataset.kit, chip.dataset.project);
-  };
-  load(...FEATURED[0]);
-  cleanup.push(() => { token++; dispose?.(); });
-}
-
-function kitsIndex() {
-  return `<div class="wrap">
-    <p class="crumbs">Kits</p>
-    <div class="page-head"><h1>Pick a kit.</h1>
-      <p class="lede">Choose a discipline to see what is in the kit and how to build every project, step by step in 3D.</p></div>
-    <div class="kit-grid" style="margin-top:36px">${DATA.kits.map(kitCard).join('')}</div>
+// ---------- build page: one card per step ----------
+const stepCard = (k, p) => `
+  <div class="steps-col focus-col">
+    <div class="pips" role="group" aria-label="Steps">${p.steps.map((s, j) => `<button data-step="${j + 1}" aria-label="Step ${j + 1}">${j + 1}</button>`).join('')}</div>
+    <div class="fcard-wrap"><article class="fcard" data-fcard aria-live="polite">
+      <p class="fno">Step ${B.count(p)}</p><p class="fstep" data-ftext>${esc(p.steps[0])}</p><p class="fdetail" data-fdetail>${esc(details(k, p)[0] ?? '')}</p>
+    </article></div>
+    <div class="stepnav"><span class="hint-s">Drag the card, or use the buttons</span>${B.stepbtns()}</div>
+    <details class="all"><summary>All ${p.steps.length} steps</summary>${B.steplist(p, k)}</details>
   </div>`;
-}
 
-function kitPage(k) {
-  const sourcing = k.sourcing ? `
-    <div class="block"><h2>Where to buy the parts</h2>
-      <p class="sub">Links the club collected for single packs and bulk orders. Prices and stock change, so check before ordering.</p>
-      <div class="source-grid">${k.sourcing.map((s) => `
-        <div class="panel source"><h3>${esc(s.part)}</h3>
-          ${s.links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.label)} ↗${l.note ? `<br><small>${esc(l.note)}</small>` : ''}</a>`).join('')}
-        </div>`).join('')}</div>
-    </div>` : '';
-  const lessons = DATA.curriculum.kit === k.id ? `
-    <div class="block"><a class="kit-card" href="#/curriculum"><span class="kit-code">LESSON PLANS</span>
-      <h3>${esc(DATA.curriculum.title)}</h3><p>${esc(DATA.curriculum.summary)}</p>
-      <span class="more">Open the lesson plans →</span></a></div>` : '';
-  return `<div class="wrap">
-    <p class="crumbs"><a href="#/kits">Kits</a> / ${esc(k.code)}</p>
-    <div class="page-head">
-      <h1>${esc(k.name)}</h1>
-      <p class="lede">${esc(k.tagline)}</p>
-      <div class="badges">
-        <span class="badge badge-k">${esc(k.code)} KIT</span>
-        ${k.cost ? `<span class="badge">${esc(k.cost)}</span>` : ''}
-        <span class="badge">${k.projects.length} projects</span>
-      </div>
-    </div>
-    <div class="block"><h2>Build guides</h2>
-      <p class="sub">Each one opens a 3D model you step through. Work in order: every project builds on the last.</p>
-      <div class="project-list">${k.projects.map((pr, i) => {
-        const d = reached(`${k.id}/${pr.id}`);
-        return `<a class="project-row" href="#/kits/${k.id}/${pr.id}">
-          <span class="n">${String(i + 1).padStart(2, '0')}</span>
-          <span><h3>${esc(pr.title)}</h3><p>${esc(pr.summary)}</p></span>
-          <span class="meta">${esc(pr.level)} · ${esc(pr.time)} · ${d ? `${d}/${pr.steps.length} steps` : `${pr.steps.length} steps`}</span>
-        </a>`;
-      }).join('')}</div>
-    </div>
-    <div class="block"><h2>What's inside</h2>
-      <div class="panels">
-        <div class="panel"><h3>Student kit</h3><p>One per student or pair.</p>${list(k.studentKit)}</div>
-        <div class="panel"><h3>Shared classroom toolbox</h3><p>One set per classroom, reused every session.</p>${list(k.classroomToolbox)}</div>
-      </div>
-    </div>
-    <div class="block"><h2>Concepts covered</h2>
-      <div class="tags">${k.concepts.map((c) => `<span class="badge">${esc(c)}</span>`).join('')}</div>
-    </div>
-    ${lessons}${sourcing}
-  </div>`;
-}
-
-function projectPage(k, pr) {
-  const i = k.projects.indexOf(pr);
-  const prev = k.projects[i - 1];
-  const next = k.projects[i + 1];
-  return `<div class="wrap">
-    <p class="crumbs"><a href="#/kits">Kits</a> / <a href="#/kits/${k.id}">${esc(k.code)}</a> / Project ${i + 1}</p>
-    <div class="page-head">
-      <h1>${esc(pr.title)}</h1>
-      <p class="lede">${esc(pr.summary)}</p>
-      <div class="badges"><span class="badge badge-k">${esc(pr.level)}</span><span class="badge">${esc(pr.time)}</span><span class="badge">${pr.steps.length} steps</span></div>
-    </div>
-    <div class="demo flush" id="guide">${stepperHtml('<div class="side-head"><span class="pulse"></span> Steps <span class="muted">· use ← → keys</span></div>')}</div>
-    <div class="block guide-below">
-      <aside class="panel"><h3>You will need</h3>${list(pr.materials)}</aside>
-      <div>
-        ${pr.code ? `<h2>Code</h2><pre class="code"><code>${esc(pr.code)}</code></pre>` : ''}
-        ${pr.note ? `<div class="callout" style="margin-top:14px"><strong>Note</strong>${esc(pr.note)}</div>` : ''}
-        <h2>Test it</h2>
-        <div class="callout"><strong>How you know it works</strong>${esc(pr.test)}</div>
-        <h2>What's going on?</h2>
-        <p>${esc(pr.why)}</p>
-        ${pr.extend ? `<h2>Go further</h2><div class="callout"><strong>Challenge</strong>${esc(pr.extend)}</div>` : ''}
-        <div class="pager">
-          ${prev ? `<a class="btn btn-ghost" href="#/kits/${k.id}/${prev.id}">← ${esc(prev.title)}</a>` : '<span></span>'}
-          ${next ? `<a class="btn" href="#/kits/${k.id}/${next.id}">Next: ${esc(next.title)} →</a>` : `<a class="btn" href="#/kits/${k.id}">Back to the ${esc(k.code)} kit</a>`}
-        </div>
-      </div>
-    </div>
-  </div>`;
-}
-
-async function bindProject(k, pr) {
-  let alive = true;
-  let stepper = null;
-  const onKey = (e) => {
-    if (!stepper || e.target.closest('input, textarea, select')) return;
-    if (e.key === 'ArrowRight') stepper.next();
-    if (e.key === 'ArrowLeft') stepper.prev();
-  };
-  document.addEventListener('keydown', onKey);
-  cleanup.push(() => { alive = false; document.removeEventListener('keydown', onKey); stepper?.(); });
-  const s = await mountStepper(document.getElementById('guide'), k, pr, { remember: true });
-  if (alive) stepper = s; else s();
-}
-
-function curriculumPage() {
-  const c = DATA.curriculum;
-  return `<div class="wrap">
-    <p class="crumbs"><a href="#/kits/${c.kit}">ECE kit</a> / Curriculum</p>
-    <div class="page-head"><h1>${esc(c.title)}</h1><p class="lede">${esc(c.summary)}</p></div>
-    <div class="block">${c.lessons.map((l, i) => `
-      <details class="lesson"${i === 0 ? ' open' : ''}>
-        <summary><span class="n">CLASS ${l.n}</span><h3>${esc(l.title)}
-          ${l.length ? `<small>${esc(l.length)}${l.topic ? ` · ${esc(l.topic)}` : ''}</small>` : ''}</h3></summary>
-        <div class="lesson-body">
-          <h4>Goal</h4><p>${esc(l.goal)}</p>
-          <h4>Big idea</h4><p>${esc(l.bigIdea)}</p>
-          ${l.materials ? `<h4>Materials</h4><p>${esc(l.materials.join(', '))}</p>` : ''}
-          ${l.objectives ? `<h4>Learning objectives</h4><ul>${l.objectives.map((o) => `<li>${esc(o)}</li>`).join('')}</ul>` : ''}
-          <h4>Vocabulary</h4><dl>${l.vocabulary.map(([t, d]) => `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>`).join('')}</dl>
-          ${l.sections.map((s) => `<h4>${esc(s.heading)}</h4>${s.body.map((b) => `<p>${esc(b)}</p>`).join('')}`).join('')}
-        </div>
-      </details>`).join('')}
-      <p class="muted" style="margin-top:20px">See these circuits in 3D: <a class="link" href="#/kits/ece/led-circuit">LED circuit →</a> <a class="link" href="#/kits/ece/mcu-led">LED controlled by code →</a></p>
-    </div>
-  </div>`;
-}
-
-const notFound = () => `<div class="wrap"><p class="crumbs">404</p><div class="page-head"><h1>Page not found.</h1>
-  <p class="lede">That page does not exist.</p><div class="hero-ctas"><a class="btn" href="#/">Go home</a></div></div></div>`;
-
-// ---------- router ----------
-function render() {
-  cleanup.forEach((fn) => fn());
-  cleanup = [];
-  const [pathPart] = location.hash.replace(/^#/, '').split('?');
-  const parts = pathPart.split('/').filter(Boolean);
-  let html;
-  let title = 'Engineering Kits';
-  let after;
-  if (!parts.length) { html = home(); after = bindHome; }
-  else if (parts[0] === 'kits' && parts.length === 1) { html = kitsIndex(); title = 'Kits'; }
-  else if (parts[0] === 'kits') {
-    const k = kitById(parts[1]);
-    const pr = k && parts[2] ? k.projects.find((x) => x.id === parts[2]) : null;
-    if (k && parts.length === 2) { html = kitPage(k); title = k.name; }
-    else if (pr && parts.length === 3) { html = projectPage(k, pr); title = pr.title; after = () => bindProject(k, pr); }
-  } else if (parts[0] === 'curriculum' && parts.length === 1) { html = curriculumPage(); title = 'Curriculum'; }
-  main.innerHTML = html || notFound();
-  document.title = `${html ? title : 'Not found'} · ${DATA.site.club}`;
-  document.querySelectorAll('[data-nav]').forEach((a) => {
-    a.dataset.nav === parts[0] ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current');
+// Drag the step card: it follows the pointer 1:1, resists past the first/last step
+// (rubber-band), and a flick commits on velocity, not just distance.
+function bindDrag(root, p, getCtl) {
+  const card = root.querySelector('[data-fcard]');
+  const rubber = (x, d, c = 0.55) => (x * d * c) / (d + c * Math.abs(x));
+  let drag = null;
+  card.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    card.setPointerCapture(e.pointerId);
+    card.style.transition = 'none';
+    drag = { x0: e.clientX, dx: 0, hist: [{ x: e.clientX, t: e.timeStamp }] };
   });
-  const io = new IntersectionObserver((entries) => entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: 0.12 });
-  main.querySelectorAll('.reveal').forEach((el) => io.observe(el));
-  cleanup.push(() => io.disconnect());
-  after?.();
+  card.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const ctl = getCtl();
+    let dx = e.clientX - drag.x0;
+    if ((dx > 0 && ctl.step === 1) || (dx < 0 && ctl.step === p.steps.length)) dx = rubber(dx, card.clientWidth);
+    drag.dx = dx;
+    drag.hist.push({ x: e.clientX, t: e.timeStamp }); if (drag.hist.length > 5) drag.hist.shift();
+    card.style.transform = `translateX(${dx}px) rotate(${dx * 0.02}deg)`;
+  });
+  const end = () => {
+    if (!drag) return;
+    const { dx, hist } = drag; drag = null;
+    const a = hist[0]; const b = hist[hist.length - 1];
+    const v = (b.x - a.x) / Math.max(1, b.t - a.t);
+    const w = card.clientWidth; const ctl = getCtl();
+    card.style.transition = '';
+    if ((dx < -w * 0.25 || v < -0.45) && ctl.step < p.steps.length) ctl.show(ctl.step + 1, 'swipe-next');
+    else if ((dx > w * 0.25 || v > 0.45) && ctl.step > 1) ctl.show(ctl.step - 1, 'swipe-prev');
+    else card.style.transform = ''; // settle back from where it was released
+  };
+  card.addEventListener('pointerup', end);
+  card.addEventListener('pointercancel', end);
 }
 
-window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); main.focus({ preventScroll: true }); });
-render();
+function cardPainter(root, k, p) {
+  const card = root.querySelector('[data-fcard]');
+  const text = root.querySelector('[data-ftext]');
+  const det = root.querySelector('[data-fdetail]');
+  let last = 1;
+  return (s, how) => {
+    text.textContent = p.steps[s - 1];
+    det.textContent = details(k, p)[s - 1] ?? '';
+    // Spatial consistency: the next step comes in from the right, the previous from the left.
+    const dir = how === 'swipe-next' ? 1 : how === 'swipe-prev' ? -1 : how === 'click' ? Math.sign(s - last) : 0;
+    last = s;
+    card.style.transform = '';
+    if (dir && !reduced()) {
+      card.animate([{ transform: `translateX(${dir * 48}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }],
+        { duration: 260, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' });
+    }
+  };
+}
+
+const pages = {
+  vt: 'morph',
+  theme,
+  top: (ctx) => `
+    <header class="top"><div class="wrap top-in">
+      <a class="brand" href="#/"><img src="logo.png" alt="" width="583" height="494"><span>WHS Engineering Club</span></a>
+      <nav aria-label="Main">
+        <a href="#/" ${ctx.nav === 'home' ? 'aria-current="page"' : ''}>Home</a>
+        <a href="#/kits" ${ctx.nav === 'kits' ? 'aria-current="page"' : ''}>Kits</a>
+        <a href="#/about" ${ctx.nav === 'about' ? 'aria-current="page"' : ''}>About</a>
+      </nav>
+      <a class="btn" href="#/kits">Pick a kit</a></div></header>`,
+  bottom: () => `
+    <footer class="foot"><div class="wrap foot-in">
+      <div class="dots">${KITS.map((k) => `<a href="#/kits/${k.id}" style="${kvars(k.id)}"><i></i>${esc(k.short)}</a>`).join('')}<a href="#/curriculum" style="${kvars('ece')}"><i></i>Intro to Arduino</a></div>
+      <p>Made by the WHS Engineering Club for Title I classrooms. <a href="https://github.com/whs-engineering-club/kits-website" target="_blank" rel="noopener">GitHub</a></p>
+    </div></footer>`,
+
+  home: () => ({
+    html: `
+    <section class="stage-hero" data-hero-stage style="${kvars(HERO[0][0])}">
+      <div data-hero-viewer></div>
+      <div class="wrap hero-over">
+        <h1 class="display">Engineering for every kid, not just the ones with a lab.</h1>
+        <p class="lead">Four low-cost kits for Title I classrooms. A bag of parts for each student, a plan for every week, and a 3D model for every step of every build.</p>
+        <div class="hero-row">
+          <a class="btn big" href="#/kits">Pick a kit</a>
+          <div class="seg" data-hero-chips role="group" aria-label="Featured build">${HERO.map(([k, p, l], i) => `<button aria-pressed="${i === 0}" data-k="${k}" data-p="${p}" style="${kvars(k)}">${l}</button>`).join('')}</div>
+          <a class="open" data-hero-open href="#/kits/meche/bridge">Open this build →</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="wrap sec" id="mission">
+      <p class="big-copy">${esc(COPY.mission)} <span>${esc(COPY.missionMore)}</span></p>
+      <div class="numbers">
+        <div><b data-countup="${STATS.kits}">${STATS.kits}</b>kits</div><div><b data-countup="${STATS.builds}">${STATS.builds}</b>builds</div>
+        <div><b data-countup="${STATS.steps}">${STATS.steps}</b>steps in 3D</div><div><b data-countup="${STATS.bonus}">${STATS.bonus}</b>bonus lessons</div>
+      </div>
+      <div class="two"><p>${esc(COPY.kitsPara)}</p><p>${esc(COPY.clubPara)}</p></div>
+      <p class="fine">${esc(COPY.costNote)}</p>
+    </section>
+
+    <section class="wrap sec">
+      <h2 class="h2">Choose your kind of engineering</h2>
+      <div class="kit-blocks">${KITS.map((k) => `
+        <a class="kblock" href="#/kits/${k.id}" style="${kvars(k.id)}">
+          <div class="tile" ${pic(`pic-${k.id}`)}>${B.render(k.id, FEATURE[k.id])}</div>
+          <div class="kb-txt"><h3>${esc(k.short)}</h3><p>${esc(k.subject)}</p><span>${k.projects.length} builds · ${k.weeks.length} weeks →</span></div>
+        </a>`).join('')}</div>
+    </section>
+
+    <section class="wrap sec"><h2 class="h2">How a unit runs</h2>
+      <div class="how">${COPY.how.map(([t, d], i) => `<div style="${kvars(KITS[i].id)}"><span class="n">${i + 1}</span><h3>${esc(t)}</h3><p>${esc(d)}</p></div>`).join('')}</div>
+    </section>
+    <section class="wrap sec narrow"><h2 class="h2">Questions</h2>${B.faq()}</section>`,
+    after: (root) => {
+      bindHero(root, theme);
+      const stage = root.querySelector('[data-hero-stage]');
+      root.querySelector('[data-hero-chips]').addEventListener('click', (e) => {
+        const c = e.target.closest('[data-k]');
+        if (c) stage.setAttribute('style', kvars(c.dataset.k)); // stage colour eases to the new kit
+      });
+    },
+  }),
+
+  kits: () => ({
+    title: 'Kits',
+    html: `<div class="wrap">${B.crumbs([['Home', '#/'], ['Kits']])}<h1 class="h1 page-title">Choose a kit</h1>
+      <div class="kit-blocks">${KITS.map((k) => `
+        <a class="kblock" href="#/kits/${k.id}" style="${kvars(k.id)}"><div class="tile" ${pic(`pic-${k.id}`)}>${B.render(k.id, FEATURE[k.id])}</div>
+          <div class="kb-txt"><h3>${esc(k.short)}</h3><p>${esc(k.tagline)}</p><span>${k.projects.length} builds · ${k.studentKit.length} parts · ${k.weeks.length} weeks →</span></div></a>`).join('')}</div></div>`,
+  }),
+
+  kit: (k) => ({
+    title: `${k.short} kit`,
+    html: `
+    <div class="kit-band" style="${kvars(k.id)}"><div class="wrap band-in">
+      <div>${B.crumbs([['Home', '#/'], ['Kits', '#/kits'], [k.short]])}<h1 class="h1">${esc(k.subject)}</h1><p class="lead">${esc(k.tagline)}</p>
+        <p class="facts"><span>${k.projects.length} builds</span><span>${k.weeks.length} weeks</span>${k.cost ? `<span>${esc(k.cost.replace(/^Student kit: around /, ''))} per kit</span>` : ''}</p></div>
+      <div class="tile band-tile" ${pic(`pic-${k.id}`)}>${B.render(k.id, FEATURE[k.id])}</div></div></div>
+    <div class="wrap" style="${kvars(k.id)}">
+      <nav class="subnav" aria-label="On this page">${[...sections.slice(0, 4), ...(k.sourcing ? [['buy', 'Where to buy']] : []), sections[4]].map(([id, l]) => `<a href="#/kits/${k.id}" data-scroll="${id}">${l}</a>`).join('')}</nav>
+      <section class="sec anchor" id="builds"><h2 class="h2">Builds</h2>
+        <div class="grid-3">${k.projects.map((p, i) => `
+          <a class="bcard" href="#/kits/${k.id}/${p.id}"><div class="tile" ${pic(`pic-${k.id}-${p.id}`)}>${B.render(k.id, p.id)}<span class="badge">${i + 1}</span></div>
+            <h3>${esc(shortTitle(p.title))}</h3><p>${esc(p.level)} · ${esc(p.time)} · ${p.steps.length} steps</p></a>`).join('')}</div></section>
+      <section class="sec anchor" id="materials"><h2 class="h2">What's in the bag</h2>${B.materials(k)}</section>
+      <section class="sec anchor" id="concepts"><h2 class="h2">Concepts covered</h2>${B.concepts(k)}</section>
+      <section class="sec anchor" id="bonus"><h2 class="h2">Bonus builds</h2><p class="intro">For classrooms with the shared toolbox.</p>${B.bonus(k)}</section>
+      ${k.sourcing ? `<section class="sec anchor" id="buy"><h2 class="h2">Where to buy the parts</h2>
+        <p class="intro">Links the club collected for single packs and bulk orders. Prices and stock change, so check before ordering.</p>
+        <div class="buy">${k.sourcing.map((g) => `<div><h3>${esc(g.part)}</h3>${g.links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.label)} ↗${l.note ? `<small>${esc(l.note)}</small>` : ''}</a>`).join('')}</div>`).join('')}</div></section>` : ''}
+      <section class="sec anchor narrow" id="plan"><h2 class="h2">Lesson plan</h2><p class="intro">${esc(PLANS.format)}</p>${B.plan(k)}
+        ${CURRICULUM.kit === k.id ? `<a class="extra" href="#/curriculum"><b>${esc(CURRICULUM.title)}</b><span>${esc(CURRICULUM.summary)}</span></a>` : ''}</section>
+    </div>`,
+    after: bindJumps,
+  }),
+
+  build: (k, p, ctx, step) => {
+    const on = store.get('kits-3d', true);
+    const i = k.projects.indexOf(p);
+    const stage = B.stage(p).replace('class="stage3d"', `class="stage3d" ${pic(`pic-${k.id}-${p.id}`)}`);
+    return {
+      title: p.title,
+      html: `
+      <div class="wrap" style="${kvars(k.id)}">
+        ${B.crumbs([['Home', '#/'], ['Kits', '#/kits'], [k.short, `#/kits/${k.id}`], [`Build ${i + 1}`]])}
+        <div class="build-head"><div><h1 class="h1">${esc(p.title)}</h1><p class="lead">${esc(p.summary)}</p></div>${B.toggle3d(on)}</div>
+        <div class="bench${on ? '' : ' no3d'}" data-bench>${stage}${stepCard(k, p)}</div>
+        ${B.after(p)}
+        ${B.pager(k, p)}
+      </div>`,
+      after: (root) => {
+        let ctl = null;
+        ctl = bindBuild(root, k, p, step, theme, { paint: cardPainter(root, k, p) });
+        bindDrag(root, p, () => ctl);
+      },
+    };
+  },
+
+  // The three-class Intro to Arduino mini-unit (ECE kit).
+  curriculum: () => {
+    const k = KITS.find((x) => x.id === CURRICULUM.kit);
+    return {
+      title: CURRICULUM.title,
+      html: `
+      <div class="kit-band" style="${kvars(k.id)}"><div class="wrap band-in solo">
+        <div>${B.crumbs([['Home', '#/'], ['Kits', '#/kits'], [k.short, `#/kits/${k.id}`], ['Intro to Arduino']])}<h1 class="h1">${esc(CURRICULUM.title)}</h1><p class="lead">${esc(CURRICULUM.summary)}</p></div></div></div>
+      <div class="wrap narrow lessons" style="${kvars(k.id)}">
+        ${CURRICULUM.lessons.map((l, i) => `
+        <details class="lesson"${i === 0 ? ' open' : ''}><summary><span class="ln">Class ${l.n}</span><span class="lt">${esc(l.title)}${l.length ? `<small>${esc(l.length)}${l.topic ? ` · ${esc(l.topic)}` : ''}</small>` : ''}</span></summary>
+          <div class="lesson-body">
+            <h3>Goal</h3><p>${esc(l.goal)}</p>
+            <h3>Big idea</h3><p>${esc(l.bigIdea)}</p>
+            ${l.materials ? `<h3>Materials</h3><p>${esc(l.materials.join(', '))}</p>` : ''}
+            ${l.objectives ? `<h3>Learning objectives</h3><ul>${l.objectives.map((o) => `<li>${esc(o)}</li>`).join('')}</ul>` : ''}
+            <h3>Vocabulary</h3><dl>${l.vocabulary.map(([t, d]) => `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>`).join('')}</dl>
+            ${l.sections.map((s) => `<h3>${esc(s.heading)}</h3>${s.body.map((b) => `<p>${esc(b)}</p>`).join('')}`).join('')}
+          </div></details>`).join('')}
+        <p class="see">See these circuits in 3D: <a class="textlink" href="#/kits/ece/led-circuit">LED circuit →</a> <a class="textlink" href="#/kits/ece/mcu-led">LED controlled by code →</a></p>
+      </div>`,
+    };
+  },
+
+  notFound: () => `<div class="wrap">${B.crumbs([['Home', '#/']])}<h1 class="h1 page-title">Page not found</h1><a class="btn" href="#/">Go home</a></div>`,
+};
+
+setPages(pages);
+window.addEventListener('hashchange', () => { route(); document.getElementById('main').focus({ preventScroll: true }); });
+route();
