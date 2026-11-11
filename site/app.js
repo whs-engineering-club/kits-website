@@ -94,7 +94,6 @@ const pages = {
       <a class="btn" href="#/kits">Pick a kit</a></div></header>`,
   bottom: () => `
     <footer class="foot"><div class="wrap foot-in">
-      <div class="dots">${KITS.map((k) => `<a href="#/kits/${k.id}" style="${kvars(k.id)}"><i></i>${esc(k.short)}</a>`).join('')}<a href="#/curriculum" style="${kvars('ece')}"><i></i>Intro to Arduino</a></div>
       <p>Made by the WHS Engineering Club for Title I classrooms. <a href="https://github.com/whs-engineering-club/kits-website" target="_blank" rel="noopener">GitHub</a></p>
     </div></footer>`,
 
