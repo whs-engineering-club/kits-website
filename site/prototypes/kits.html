@@ -79,10 +79,7 @@ html, body { margin: 0; height: 100%; background: #FFFDF9; overflow: hidden; }
 
 <nav class="proto-picker" aria-label="Prototype variants">
   <span class="proto-picker-highlight" aria-hidden="true"></span>
-  <button class="proto-picker-item" data-active aria-current="true">Wheel</button>
-  <button class="proto-picker-item">Stack</button>
-  <button class="proto-picker-item">Track</button>
-  <button class="proto-picker-item">Spotlight</button>
+  <button class="proto-picker-item" data-active aria-current="true">Spotlight + hero</button>
   <span class="proto-picker-divider" aria-hidden="true"></span>
   <button class="proto-picker-item proto-picker-replay" aria-label="Replay animation (R)">↻</button>
 </nav>
@@ -90,12 +87,10 @@ html, body { margin: 0; height: 100%; background: #FFFDF9; overflow: hidden; }
 <script type="module">
 import { FONT_LINK, BASE_CSS } from './shared.js';
 import * as combined from './combined.js';
-import * as wheel from './k1-wheel.js';
-import * as stack from './k2-stack.js';
-import * as track from './k3-track.js';
 import * as spotlight from './k4-spotlight.js';
+import * as hero from './hero.js';
 
-const mods = [wheel, stack, track, spotlight];
+const mods = [spotlight];
 const stage = document.getElementById('stage');
 const picker = document.querySelector('.proto-picker');
 const highlight = picker.querySelector('.proto-picker-highlight');
@@ -122,7 +117,7 @@ function mount(i) {
     if (mine !== token) return;
     const link = doc.createElement('link'); link.rel = 'stylesheet'; link.href = FONT_LINK; doc.head.append(link);
     const style = doc.createElement('style'); style.id = 'pv-style'; style.textContent = BASE_CSS + combined.css + mods[i].css; doc.head.append(style);
-    const stops = [combined.setup(win, doc), mods[i].setup(win, doc)];
+    const stops = [combined.setup(win, doc), mods[i].setup(win, doc), hero.setup(win, doc)];
     teardown = () => { stops.forEach((s) => s?.()); };
     // keys keep working while the page has focus
     doc.addEventListener('keydown', onKey);

@@ -3,6 +3,7 @@
 // the rest are disposed, so there are never more than two running at once.
 import { FEATURE, loadModels } from '../core.js';
 import { mountViewer } from '../viewer.js';
+import { plain } from './hero-anim.js'; // the Spotlight scenes keep the plain, unanimated models
 
 const BG = { ece: 0xe6ecff, meche: 0xffe8da, aero: 0xdcf1ee, bme: 0xe3f1df }; // same as the site's kit tile colours
 // Pin progress (0 = section entering at the bottom, 1 = leaving at the top) during which each scene can be seen.
@@ -19,7 +20,8 @@ export function attachViewers(scenes, pin) {
     if (live[i]) return;
     live[i] = 'pending';
     const { el, kit } = scenes[i];
-    const build = (await loadModels(kit))[FEATURE[kit]];
+    const models = await loadModels(kit);
+    const build = plain(kit, FEATURE[kit], models);
     if (live[i] !== 'pending') return; // scrolled away while loading
     const v = mountViewer(el, build, { step: 'last', autoRotate: true, overview: true, theme: { bg: BG[kit], shadow: 0.14 } });
     live[i] = v;
