@@ -23,19 +23,9 @@ Each kit has its own colour, which follows it into tiles, headers and the 3D bac
 | `server/server.mjs` | Small server: serves `site/` and a read-only JSON API of the kit content. No dependencies. |
 | `.github/workflows/pages.yml` | Publishes `site/` to GitHub Pages on every push to `main`. |
 
-## Run it locally
+## Running Link
 
-Needs Node 22 or newer. There is nothing to install.
-
-```bash
-npm start
-```
-
-Open http://localhost:3000.
-
-```bash
-npm test
-```
+https://whs-engineering-club.github.io/kits-website/
 
 ## The server
 
