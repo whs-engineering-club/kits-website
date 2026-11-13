@@ -93,10 +93,10 @@ const pages = {
         <a href="#/kits" ${ctx.nav === 'kits' ? 'aria-current="page"' : ''}>Kits</a>
         <a href="#/about" ${ctx.nav === 'about' ? 'aria-current="page"' : ''}>About</a>
       </nav>
-      <a class="btn" href="#/kits">Pick a kit</a></div></header>`,
+      <a class="btn" href="https://whs-engineering-club.github.io/eng-club-website/" target="_blank" rel="noopener">Visit the club website</a></div></header>`,
   bottom: () => `
     <footer class="foot"><div class="wrap foot-in">
-      <p>Made by the WHS Engineering Club for Title I classrooms. <a href="https://github.com/whs-engineering-club/kits-website" target="_blank" rel="noopener">GitHub</a></p>
+      <p>Made by the WHS Engineering Club for Title I classrooms. <a href="https://whs-engineering-club.github.io/eng-club-website/" target="_blank" rel="noopener">Engineering Club website</a> · <a href="https://github.com/whs-engineering-club/kits-website" target="_blank" rel="noopener">GitHub</a></p>
     </div></footer>`,
 
   home: () => ({
@@ -107,7 +107,7 @@ const pages = {
         <h1 class="display">Engineering for every kid, not just the ones with a lab.</h1>
         <p class="lead">Four low-cost kits for Title I classrooms. A bag of parts for each student, a plan for every week, and a 3D model for every step of every build.</p>
         <div class="hero-row">
-          <a class="btn big" href="#/kits">Pick a kit</a>
+          <a class="btn big" href="https://whs-engineering-club.github.io/eng-club-website/" target="_blank" rel="noopener">Visit the club website</a>
           <div class="seg" data-hero-chips role="group" aria-label="Featured build">${HERO.map(([k, p, l], i) => `<button aria-pressed="${i === 0}" data-k="${k}" data-p="${p}" style="${kvars(k)}">${l}</button>`).join('')}</div>
           <a class="open" data-hero-open href="#/kits/meche/bridge">Open this build →</a>
         </div>
